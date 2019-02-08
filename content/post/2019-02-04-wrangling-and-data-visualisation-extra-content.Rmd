@@ -1,0 +1,211 @@
+---
+title: Wrangling and Data Visualisation Extra Content
+author: James Stone
+date: '2019-02-04'
+slug: wrangling-and-data-visualisation-extra-content
+categories:
+  - LUBS2095 - Understanding Data in the Social Sciences
+tags:
+  - R
+  - dplyr
+  - tidyr
+  - ggplot2
+  - wrangling
+  - visualisation
+  - '#TidyTuesday'
+  - '#rstats'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 12, fig.height = 8)
+extrafont::loadfonts(device="win")
+```
+
+In the second session of the course we focused on the topics of data 'wrangling' and visualisation. Building on the R basics covered in session one we started using [tidyverse](https://www.tidyverse.org) packages to get a 'baseline' set of R tools to be able to efficiently do the R programming required throughout the rest of this course.
+
+The purpose of this post is to show an additional example of a multi-layered ggplot graphic that also requires a degree of data wrangling to produce. A secondary purpose is to introduce you to [TidyTuesday](https://github.com/rfordatascience/tidytuesday) (which I have only recently found myself). Every week a new dataset is selected and people interested in R from beginners to experts do 'something' with the data and share the results via the hashtag [#TidyTuesday](https://twitter.com/search?q=%23TidyTuesday) often with the source code required. It's a great way to learn more R/analysis skills in a fluid way. 
+
+I was searching #TidyTuesday posts when I found a plot that I thought was great based on the "TV's Golden Age" dataset. 
+
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="en"><p lang="en" dir="ltr">Plot #2 for week 2 of <a href="https://twitter.com/hashtag/tidytuesday?src=hash&amp;ref_src=twsrc%5Etfw">#tidytuesday</a> was a lot more coding - a lot of diving in to both programmatically and manually change/highlight elements of the plot.<br><br>🗞️ <a href="https://t.co/VYtMlxwjUP">https://t.co/VYtMlxwjUP</a> <br>👨
+💻 <a href="https://t.co/4jdoIi93D4">https://t.co/4jdoIi93D4</a> <a href="https://t.co/Qeia5dTOF4">pic.twitter.com/Qeia5dTOF4</a></p>&mdash; Thomas Mock 👨🏼
+💻 (@thomas_mock) <a href="https://twitter.com/thomas_mock/status/1083002045181976576?ref_src=twsrc%5Etfw">January 9, 2019</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+In this submission [@thomas_mock](https://twitter.com/thomas_mock) used ggplot2 to produce a plot from The Economist's article from which the data is based. It's a great visualisation which is rich in information - allowing significant parts of the data to 'pop' on top of the whole dataset.
+
+Rather than just dissect the code to produce this exact plot I thought it would be better to take a different dataset from the #TidyTuesday archive where a similar plot could be produced. 
+
+In honor of the fact that our second session was the day after the Superbowl I chose the [NFL Stats dataset](https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-08-28) from week 22 of 2018. 
+
+Loading the required libraries and data:
+
+```{r message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggrepel)
+library(lubridate)
+nfl.data <- read.csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-08-28/nfl_2010-2017.csv")
+```
+
+This dataset contains game-by-game statistics of players from 2000 to 2017. 
+
+Many of the #TidyTuesday posts I saw on twitter when filtered between the dates where this was the active dataset made the conclusion that modern NFL has a trend towards greater emphasis on the passing game (plays where the Quarterback throws the ball) compared to the running game (when the QB hands the ball off to a Running Back). 
+
+To build on these suggestions and build a similar plot to the golden-age TV plot we saw above let's produce a visualisation showing the total yards gained by every RB for each sesion we have data for. Additionally, we can pick out the runners with the most impressive seasons and highlight their data for emphasis. 
+
+Preview of the data:
+
+```{r}
+nfl.data %>% 
+  select(name, game_year, game_week, rush_yds, rush_att) %>% 
+  slice(1:10)
+```
+
+To work out the top 10 running seasons in this 17-year span we must first summarise each player's performance per season in terms of total yards gained (also total attempts as additional information). The commands here are mostly familiar from the lecture/workshop material we have already covered. The things not seen already are grouping by multiple variables at once and the **ungroup()** function. This group_by command will segment the dataframe by unique combinations of name and year meaning our summary operations will be calculated on each player for each season, without *game_year* we would be calculating the total number of yards acquired over all the seasons for which the player has data. After the data is summarised it's a useful habit to **ungroup()** the dataframe if you are saving it to the workspace just incase you forget it's grouped and it creates unintended consequences down the line.
+
+```{r}
+top_rushers <- nfl.data %>% 
+  group_by(name, game_year) %>% 
+  summarise(totalRushYds = sum(rush_yds, na.rm=TRUE),
+            totalRushAttempts = sum(rush_att, na.rm=TRUE)) %>% 
+  arrange(desc(totalRushYds)) %>% 
+  ungroup() %>% 
+  slice(1:10)
+print(top_rushers)
+```
+
+Now we want to create a dataframe to use for the main plot that filters out any player with less than 50 carries and we create a new variable that is used to flag whether or not a particular player is one of the players who tallied one of the 10 best rushing seasons. 
+
+```{r}
+summarised.runner.data <- nfl.data %>% 
+  group_by(name, game_year) %>% 
+  summarise(totalRushYds = sum(rush_yds, na.rm=T),
+            totalRushAttempts = sum(rush_att, na.rm=T)) %>% 
+  filter(totalRushAttempts > 50) %>%
+  ungroup() %>% 
+  mutate(top_runner = ifelse(name %in% unique(top_rushers$name), "highlight", "noHighlight"))
+```
+
+Now that we know the runners who had the best 10 seasons in the 2000-2017 span and this is flagged in a summary dataset we can create the plot. Similar to the workshop we'll do this in several stages looking at the results as we go. 
+
+## Step One - Basic Plot Structure
+
+Create the basic structure of the ggplot. for each game_year we plot the rushing totals for all players with over 50 total attempts. As game_year is discrete we add **position=position_jitter()** as this adds a slight bit of randomness to the location where the dot is plotted - we do this because of the amount of overlapping points. We have seen **geom_smooth()** already but with *method="lm"* for a linear fit. Here we use *method="loess"* which is a localised regression fit meaning it will follow the trend of the data unconstrained. The annotate function adds the 'overall trend' label to the plot at the x and y coordinates specified.
+
+```{r}
+main.colour = "#43a3ca" # hex color used repeatedly so define as variable
+
+best_season_plot <- summarised.runner.data %>% 
+  ggplot(aes(x = game_year, y = totalRushYds, size = totalRushAttempts)) +
+  geom_point(aes(alpha = as.factor(top_runner)), color = main.colour, position = position_jitter(width=0.1)) + 
+  geom_smooth(method="loess", se=F, color="grey4", linetype="dashed", size=1, alpha=0.7) + 
+  annotate("text",
+           x = 2014, y = 500, color = "grey4",
+           label = "Overall Trend", size = 8, fontface ="bold",
+           family="Calibri",
+           alpha = 0.6
+  )
+best_season_plot
+```
+
+## Step Two 
+
+Use geom_path() to link the top runners data together. We include a *data* argument inside the geom because we want this geom to use a subset of the main dataset. By only including the data of those who are top_runners we ensure that this geom_path() layer will only be drawn for the "top runners". 
+
+```{r}
+best_season_plot <- best_season_plot + 
+  geom_path(
+    data = filter(summarised.runner.data, top_runner == "highlight"),
+    aes(group = name), color = main.colour, size = 0.75
+  )
+best_season_plot
+```
+
+## Step Three
+
+Add player name labels for those runners whom we have highlighted. Note here the data selection - we want the player label to point to the runners best season. 
+
+```{r}
+best_season_plot <- best_season_plot + 
+  geom_text_repel(
+    data = filter(summarised.runner.data, top_runner == "highlight") %>% 
+      group_by(name) %>% 
+      arrange(desc(totalRushYds)) %>% 
+      slice(1),
+    aes(label = name),
+    size = 6,
+    nudge_y = + 300,
+    nudge_x = 0.5,
+    segment.size = 0.5,
+    segment.colour = "black",
+    direction = "x",
+    color = "#bc145a",
+    fontface = "bold",
+    family = "Calibri"
+  )
+best_season_plot
+```
+
+## Step Four
+
+We have all the information we need but the appearance is a little bit all over the place. So we need to tidy that up. A lot of this is new as we spent the workshop time gaining experience of creating standard ggplots needing minimal to no customisation. 
+
+The **scale_x_** and **scale_y_** family of functions are used to alter the axes of the plots. 
+
+In the initial setup of the ggplot we set the alpha mapping to be *as.factor(top_runner)* because we want the points that aren't represnting the top runners to be much more transparent than the top runners. The default vlaues selected weren't suitable because the top runners data was the category selected to be more transparent (we could have releveled the factor but better to learn this way imo). We use **scale_alpha_discrete** to manually set the alpha values for each category. The *guide="none" removes the legend for this mapping. 
+
+```{r}
+best_season_plot <- best_season_plot  +
+  scale_x_continuous(breaks = seq(2000,2017,2)) + 
+  scale_y_continuous(position = "right", limits=c(0,2400)) + 
+  scale_alpha_discrete(range=c(0.9,0.2), guide = "none") + 
+  labs(x = "Season",
+       y = "Total Rush Yards",
+       title = "Every rushing yardage total 2000 - 2017 (min 50 attempts)",
+       subtitle = "Emphasis on rushers with the top 15 best rushing seasons in that timespan",
+       caption = "Data: #TidyTuesday 2018 week 22")
+best_season_plot
+```
+
+## Step Five 
+
+All purely cosmetic changes to tweak the final appearance. the use of **rel()** to define the text sizes is new for us and useful. It means to change the size relative to the overall default size, so think of rel(1) as being the default text size and then rel(0.%) would be half that size whereas rel(2) would be twice that size.
+
+```{r}
+best_season_plot <- best_season_plot + 
+  theme_minimal() + 
+  theme(
+    text = element_text(family = "Calibri"),
+    legend.position = c(0.5,0.05),
+    legend.direction = "horizontal",
+    axis.text = element_text(size = rel(1)),
+    title = element_text(size = rel(2), face="bold"),
+    legend.text = element_text(size=rel(.9)),
+    legend.title = element_text(size=rel(.75)),
+    axis.title = element_text(size = rel(1.5))
+  )
+best_season_plot
+```
+
+As we chose to print the name labels above the best season a player had it means they are fairly crowded so this plot could be better with more customisation with regards to the label position. Nevertheless it's a nice visualisation showing the overall trend of rushing totals while highlighting standout performers. 
+
+# An important lesson
+
+I happened to know that Chris Johnson should have a season with over 2000 yards in amongst this timespan but our plot shows no rushing total to be higher than 2000. Due to this I looked at the data a bit more and found that there was a game missing for every player in every season e.g. 
+
+```{r}
+nfl.data %>% 
+  filter(name == "Chris Johnson" & game_year == 2009)
+```
+
+Every combination of player/year shows 15 rows when the NFL regular season is 16 games. I tweeted about this and got a fast reponse:
+
+<blockquote class="twitter-tweet" data-lang="en"><p lang="en" dir="ltr">This was before I was adding detailed sub-readme guides.<br><br>Data corresponds to NFL week 1-16 and was part of a fantasy football relevant data challenge. 👍</p>&mdash; Thomas Mock 👨🏼
+💻 (@thomas_mock) <a href="https://twitter.com/thomas_mock/status/1093564713869500421?ref_src=twsrc%5Etfw">February 7, 2019</a></blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+Remember in the lecture when I said about data wrangling and visualisation that "it sounds cheesy but we need to get to know our data" - this is a good example of a time when I should have got to know the data before my analysis because my plot doesn't actually show rushing season totals it shows rushing season totals not including the final game of every season! 
+
+It's a valuable lesson. Nevertheless the time is not wasted because whenever you try to produce a complicated plot like this you either learn something new or reinforce what you already knew. 
+
+Now I need to get that final game_week data for each season... :-) 

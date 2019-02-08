@@ -1,0 +1,244 @@
+---
+title: Wrangling and Data Visualisation Extra Content
+author: James Stone
+date: '2019-02-04'
+slug: wrangling-and-data-visualisation-extra-content
+categories:
+  - LUBS2095 - Understanding Data in the Social Sciences
+tags:
+  - R
+  - dplyr
+  - tidyr
+  - ggplot2
+  - wrangling
+  - visualisation
+  - '#TidyTuesday'
+  - '#rstats'
+---
+
+
+
+<p>In the second session of the course we focused on the topics of data ‘wrangling’ and visualisation. Building on the R basics covered in session one we started using <a href="https://www.tidyverse.org">tidyverse</a> packages to get a ‘baseline’ set of R tools to be able to efficiently do the R programming required throughout the rest of this course.</p>
+<p>The purpose of this post is to show an additional example of a multi-layered ggplot graphic that also requires a degree of data wrangling to produce. A secondary purpose is to introduce you to <a href="https://github.com/rfordatascience/tidytuesday">TidyTuesday</a> (which I have only recently found myself). Every week a new dataset is selected and people interested in R from beginners to experts do ‘something’ with the data and share the results via the hashtag <a href="https://twitter.com/search?q=%23TidyTuesday">#TidyTuesday</a> often with the source code required. It’s a great way to learn more R/analysis skills in a fluid way.</p>
+<p>I was searching #TidyTuesday posts when I found a plot that I thought was great based on the “TV’s Golden Age” dataset.</p>
+<blockquote class="twitter-tweet" data-conversation="none" data-lang="en">
+<p lang="en" dir="ltr">
+Plot #2 for week 2 of <a href="https://twitter.com/hashtag/tidytuesday?src=hash&amp;ref_src=twsrc%5Etfw">#tidytuesday</a> was a lot more coding - a lot of diving in to both programmatically and manually change/highlight elements of the plot.<br><br>🗞️ <a href="https://t.co/VYtMlxwjUP">https://t.co/VYtMlxwjUP</a> <br>👨 💻 <a href="https://t.co/4jdoIi93D4">https://t.co/4jdoIi93D4</a> <a href="https://t.co/Qeia5dTOF4">pic.twitter.com/Qeia5dTOF4</a>
+</p>
+— Thomas Mock 👨🏼 💻 (<span class="citation">@thomas_mock</span>) <a href="https://twitter.com/thomas_mock/status/1083002045181976576?ref_src=twsrc%5Etfw">January 9, 2019</a>
+</blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>In this submission <span class="citation">[@thomas_mock]</span>(<a href="https://twitter.com/thomas_mock" class="uri">https://twitter.com/thomas_mock</a>) used ggplot2 to produce a plot from The Economist’s article from which the data is based. It’s a great visualisation which is rich in information - allowing significant parts of the data to ‘pop’ on top of the whole dataset.</p>
+<p>Rather than just dissect the code to produce this exact plot I thought it would be better to take a different dataset from the #TidyTuesday archive where a similar plot could be produced.</p>
+<p>In honor of the fact that our second session was the day after the Superbowl I chose the <a href="https://github.com/rfordatascience/tidytuesday/tree/master/data/2018/2018-08-28">NFL Stats dataset</a> from week 22 of 2018.</p>
+<p>Loading the required libraries and data:</p>
+<pre class="r"><code>library(tidyverse)
+library(ggrepel)
+library(lubridate)
+nfl.data &lt;- read.csv(&quot;https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2018/2018-08-28/nfl_2010-2017.csv&quot;)</code></pre>
+<p>This dataset contains game-by-game statistics of players from 2000 to 2017.</p>
+<p>Many of the #TidyTuesday posts I saw on twitter when filtered between the dates where this was the active dataset made the conclusion that modern NFL has a trend towards greater emphasis on the passing game (plays where the Quarterback throws the ball) compared to the running game (when the QB hands the ball off to a Running Back).</p>
+<p>To build on these suggestions and build a similar plot to the golden-age TV plot we saw above let’s produce a visualisation showing the total yards gained by every RB for each sesion we have data for. Additionally, we can pick out the runners with the most impressive seasons and highlight their data for emphasis.</p>
+<p>Preview of the data:</p>
+<pre class="r"><code>nfl.data %&gt;% 
+  select(name, game_year, game_week, rush_yds, rush_att) %&gt;% 
+  slice(1:10)</code></pre>
+<pre><code>##               name game_year game_week rush_yds rush_att
+## 1      Duce Staley      2000         1      201       26
+## 2      Lamar Smith      2000         1      145       27
+## 3      Tiki Barber      2000         1      144       13
+## 4    Stephen Davis      2000         1      133       23
+## 5   Edgerrin James      2000         1      124       28
+## 6    Priest Holmes      2000         1      119       27
+## 7    Curtis Martin      2000         1      110       30
+## 8     Robert Smith      2000         1      109       14
+## 9  Tim Biakabutuka      2000         1       88       15
+## 10     Cade McNown      2000         1       87       10</code></pre>
+<p>To work out the top 10 running seasons in this 17-year span we must first summarise each player’s performance per season in terms of total yards gained (also total attempts as additional information). The commands here are mostly familiar from the lecture/workshop material we have already covered. The things not seen already are grouping by multiple variables at once and the <strong>ungroup()</strong> function. This group_by command will segment the dataframe by unique combinations of name and year meaning our summary operations will be calculated on each player for each season, without <em>game_year</em> we would be calculating the total number of yards acquired over all the seasons for which the player has data. After the data is summarised it’s a useful habit to <strong>ungroup()</strong> the dataframe if you are saving it to the workspace just incase you forget it’s grouped and it creates unintended consequences down the line.</p>
+<pre class="r"><code>top_rushers &lt;- nfl.data %&gt;% 
+  group_by(name, game_year) %&gt;% 
+  summarise(totalRushYds = sum(rush_yds, na.rm=TRUE),
+            totalRushAttempts = sum(rush_att, na.rm=TRUE)) %&gt;% 
+  arrange(desc(totalRushYds)) %&gt;% 
+  ungroup() %&gt;% 
+  slice(1:10)
+print(top_rushers)</code></pre>
+<pre><code>## # A tibble: 10 x 4
+##    name                game_year totalRushYds totalRushAttempts
+##    &lt;fct&gt;                   &lt;int&gt;        &lt;int&gt;             &lt;int&gt;
+##  1 Jamal Lewis              2003         1952               360
+##  2 Adrian Peterson          2012         1898               314
+##  3 Chris Johnson            2009         1872               322
+##  4 Shaun Alexander          2005         1807               350
+##  5 LaDainian Tomlinson      2006         1749               332
+##  6 DeMarco Murray           2014         1745               372
+##  7 Adrian Peterson          2008         1740               359
+##  8 Adrian Peterson          2007         1724               357
+##  9 Ricky Williams           2002         1703               363
+## 10 Ahman Green              2003         1665               335</code></pre>
+<p>Now we want to create a dataframe to use for the main plot that filters out any player with less than 50 carries and we create a new variable that is used to flag whether or not a particular player is one of the players who tallied one of the 10 best rushing seasons.</p>
+<pre class="r"><code>summarised.runner.data &lt;- nfl.data %&gt;% 
+  group_by(name, game_year) %&gt;% 
+  summarise(totalRushYds = sum(rush_yds, na.rm=T),
+            totalRushAttempts = sum(rush_att, na.rm=T)) %&gt;% 
+  filter(totalRushAttempts &gt; 50) %&gt;%
+  ungroup() %&gt;% 
+  mutate(top_runner = ifelse(name %in% unique(top_rushers$name), &quot;highlight&quot;, &quot;noHighlight&quot;))</code></pre>
+<p>Now that we know the runners who had the best 10 seasons in the 2000-2017 span and this is flagged in a summary dataset we can create the plot. Similar to the workshop we’ll do this in several stages looking at the results as we go.</p>
+<div id="step-one---basic-plot-structure" class="section level2">
+<h2>Step One - Basic Plot Structure</h2>
+<p>Create the basic structure of the ggplot. for each game_year we plot the rushing totals for all players with over 50 total attempts. As game_year is discrete we add <strong>position=position_jitter()</strong> as this adds a slight bit of randomness to the location where the dot is plotted - we do this because of the amount of overlapping points. We have seen <strong>geom_smooth()</strong> already but with <em>method=“lm”</em> for a linear fit. Here we use <em>method=“loess”</em> which is a localised regression fit meaning it will follow the trend of the data unconstrained. The annotate function adds the ‘overall trend’ label to the plot at the x and y coordinates specified.</p>
+<pre class="r"><code>main.colour = &quot;#43a3ca&quot; # hex color used repeatedly so define as variable
+
+best_season_plot &lt;- summarised.runner.data %&gt;% 
+  ggplot(aes(x = game_year, y = totalRushYds, size = totalRushAttempts)) +
+  geom_point(aes(alpha = as.factor(top_runner)), color = main.colour, position = position_jitter(width=0.1)) + 
+  geom_smooth(method=&quot;loess&quot;, se=F, color=&quot;grey4&quot;, linetype=&quot;dashed&quot;, size=1, alpha=0.7) + 
+  annotate(&quot;text&quot;,
+           x = 2014, y = 500, color = &quot;grey4&quot;,
+           label = &quot;Overall Trend&quot;, size = 8, fontface =&quot;bold&quot;,
+           family=&quot;Calibri&quot;,
+           alpha = 0.6
+  )
+best_season_plot</code></pre>
+<pre><code>## Warning: Using alpha for a discrete variable is not advised.</code></pre>
+<p><img src="/post/2019-02-04-wrangling-and-data-visualisation-extra-content_files/figure-html/unnamed-chunk-5-1.png" width="1152" /></p>
+</div>
+<div id="step-two" class="section level2">
+<h2>Step Two</h2>
+<p>Use geom_path() to link the top runners data together. We include a <em>data</em> argument inside the geom because we want this geom to use a subset of the main dataset. By only including the data of those who are top_runners we ensure that this geom_path() layer will only be drawn for the “top runners”.</p>
+<pre class="r"><code>best_season_plot &lt;- best_season_plot + 
+  geom_path(
+    data = filter(summarised.runner.data, top_runner == &quot;highlight&quot;),
+    aes(group = name), color = main.colour, size = 0.75
+  )
+best_season_plot</code></pre>
+<pre><code>## Warning: Using alpha for a discrete variable is not advised.</code></pre>
+<p><img src="/post/2019-02-04-wrangling-and-data-visualisation-extra-content_files/figure-html/unnamed-chunk-6-1.png" width="1152" /></p>
+</div>
+<div id="step-three" class="section level2">
+<h2>Step Three</h2>
+<p>Add player name labels for those runners whom we have highlighted. Note here the data selection - we want the player label to point to the runners best season.</p>
+<pre class="r"><code>best_season_plot &lt;- best_season_plot + 
+  geom_text_repel(
+    data = filter(summarised.runner.data, top_runner == &quot;highlight&quot;) %&gt;% 
+      group_by(name) %&gt;% 
+      arrange(desc(totalRushYds)) %&gt;% 
+      slice(1),
+    aes(label = name),
+    size = 6,
+    nudge_y = + 300,
+    nudge_x = 0.5,
+    segment.size = 0.5,
+    segment.colour = &quot;black&quot;,
+    direction = &quot;x&quot;,
+    color = &quot;#bc145a&quot;,
+    fontface = &quot;bold&quot;,
+    family = &quot;Calibri&quot;
+  )
+best_season_plot</code></pre>
+<pre><code>## Warning: Using alpha for a discrete variable is not advised.</code></pre>
+<p><img src="/post/2019-02-04-wrangling-and-data-visualisation-extra-content_files/figure-html/unnamed-chunk-7-1.png" width="1152" /></p>
+</div>
+<div id="step-four" class="section level2">
+<h2>Step Four</h2>
+<p>We have all the information we need but the appearance is a little bit all over the place. So we need to tidy that up. A lot of this is new as we spent the workshop time gaining experience of creating standard ggplots needing minimal to no customisation.</p>
+<p>The <strong>scale_x_</strong> and <strong>scale_y_</strong> family of functions are used to alter the axes of the plots.</p>
+<p>In the initial setup of the ggplot we set the alpha mapping to be <em>as.factor(top_runner)</em> because we want the points that aren’t represnting the top runners to be much more transparent than the top runners. The default vlaues selected weren’t suitable because the top runners data was the category selected to be more transparent (we could have releveled the factor but better to learn this way imo). We use <strong>scale_alpha_discrete</strong> to manually set the alpha values for each category. The *guide=“none” removes the legend for this mapping.</p>
+<pre class="r"><code>best_season_plot &lt;- best_season_plot  +
+  scale_x_continuous(breaks = seq(2000,2017,2)) + 
+  scale_y_continuous(position = &quot;right&quot;, limits=c(0,2400)) + 
+  scale_alpha_discrete(range=c(0.9,0.2), guide = &quot;none&quot;) + 
+  labs(x = &quot;Season&quot;,
+       y = &quot;Total Rush Yards&quot;,
+       title = &quot;Every rushing yardage total 2000 - 2017 (min 50 attempts)&quot;,
+       subtitle = &quot;Emphasis on rushers with the top 15 best rushing seasons in that timespan&quot;,
+       caption = &quot;Data: #TidyTuesday 2018 week 22&quot;)</code></pre>
+<pre><code>## Warning: Using alpha for a discrete variable is not advised.</code></pre>
+<pre class="r"><code>best_season_plot</code></pre>
+<p><img src="/post/2019-02-04-wrangling-and-data-visualisation-extra-content_files/figure-html/unnamed-chunk-8-1.png" width="1152" /></p>
+</div>
+<div id="step-five" class="section level2">
+<h2>Step Five</h2>
+<p>All purely cosmetic changes to tweak the final appearance. the use of <strong>rel()</strong> to define the text sizes is new for us and useful. It means to change the size relative to the overall default size, so think of rel(1) as being the default text size and then rel(0.%) would be half that size whereas rel(2) would be twice that size.</p>
+<pre class="r"><code>best_season_plot &lt;- best_season_plot + 
+  theme_minimal() + 
+  theme(
+    text = element_text(family = &quot;Calibri&quot;),
+    legend.position = c(0.5,0.05),
+    legend.direction = &quot;horizontal&quot;,
+    axis.text = element_text(size = rel(1)),
+    title = element_text(size = rel(2), face=&quot;bold&quot;),
+    legend.text = element_text(size=rel(.9)),
+    legend.title = element_text(size=rel(.75)),
+    axis.title = element_text(size = rel(1.5))
+  )
+best_season_plot</code></pre>
+<p><img src="/post/2019-02-04-wrangling-and-data-visualisation-extra-content_files/figure-html/unnamed-chunk-9-1.png" width="1152" /></p>
+<p>As we chose to print the name labels above the best season a player had it means they are fairly crowded so this plot could be better with more customisation with regards to the label position. Nevertheless it’s a nice visualisation showing the overall trend of rushing totals while highlighting standout performers.</p>
+</div>
+<div id="an-important-lesson" class="section level1">
+<h1>An important lesson</h1>
+<p>I happened to know that Chris Johnson should have a season with over 2000 yards in amongst this timespan but our plot shows no rushing total to be higher than 2000. Due to this I looked at the data a bit more and found that there was a game missing for every player in every season e.g.</p>
+<pre class="r"><code>nfl.data %&gt;% 
+  filter(name == &quot;Chris Johnson&quot; &amp; game_year == 2009)</code></pre>
+<pre><code>##        X          name team game_year game_week rush_att rush_yds rush_avg
+## 1  16624 Chris Johnson  TEN      2009         1       15       57      3.8
+## 2  16735 Chris Johnson  TEN      2009         2       16      197     12.3
+## 3  16878 Chris Johnson  TEN      2009         3       22       97      4.4
+## 4  17013 Chris Johnson  TEN      2009         4       16       83      5.2
+## 5  17151 Chris Johnson  TEN      2009         5        9       34      3.8
+## 6  17231 Chris Johnson  TEN      2009         6       17      128      7.5
+## 7  17447 Chris Johnson  TEN      2009         8       24      228      9.5
+## 8  17556 Chris Johnson  TEN      2009         9       25      135      5.4
+## 9  17661 Chris Johnson  TEN      2009        10       26      132      5.1
+## 10 17773 Chris Johnson  TEN      2009        11       29      151      5.2
+## 11 17895 Chris Johnson  TEN      2009        12       18      154      8.6
+## 12 18026 Chris Johnson  TEN      2009        13       27      113      4.2
+## 13 18154 Chris Johnson  TEN      2009        14       28      117      4.2
+## 14 18290 Chris Johnson  TEN      2009        15       29      104      3.6
+## 15 18415 Chris Johnson  TEN      2009        16       21      142      6.8
+##    rush_tds rush_fumbles rec rec_yds rec_avg rec_tds rec_fumbles pass_att
+## 1         0            0   1      11    11.0       0           0       NA
+## 2         2            0   9      87     9.7       1           0       NA
+## 3         0            0   1       8     8.0       0           0       NA
+## 4         0            1   3      11     3.7       0           1       NA
+## 5         0            0   2       9     4.5       0           0       NA
+## 6         0            0   0       0     0.0       0           0       NA
+## 7         2            0   2      11     5.5       0           0       NA
+## 8         2            0   3      25     8.3       0           0        1
+## 9         2            0   9     100    11.1       0           0       NA
+## 10        0            0   0       0     0.0       0           0       NA
+## 11        1            0   3      32    10.7       0           0       NA
+## 12        0            0   6      28     4.7       0           0       NA
+## 13        2            0   3      69    23.0       1           0       NA
+## 14        0            1   2      55    27.5       0           1       NA
+## 15        1            0   3      37    12.3       0           0       NA
+##    pass_yds pass_tds int sck pass_fumbles rate position
+## 1        NA       NA  NA  NA           NA   NA       RB
+## 2        NA       NA  NA  NA           NA   NA       RB
+## 3        NA       NA  NA  NA           NA   NA       RB
+## 4        NA       NA  NA  NA           NA   NA       RB
+## 5        NA       NA  NA  NA           NA   NA       RB
+## 6        NA       NA  NA  NA           NA   NA       RB
+## 7        NA       NA  NA  NA           NA   NA       RB
+## 8         0        0   0   0            0 39.6       RB
+## 9        NA       NA  NA  NA           NA   NA       RB
+## 10       NA       NA  NA  NA           NA   NA       RB
+## 11       NA       NA  NA  NA           NA   NA       RB
+## 12       NA       NA  NA  NA           NA   NA       RB
+## 13       NA       NA  NA  NA           NA   NA       RB
+## 14       NA       NA  NA  NA           NA   NA       RB
+## 15       NA       NA  NA  NA           NA   NA       RB</code></pre>
+<p>Every combination of player/year shows 15 rows when the NFL regular season is 16 games. I tweeted about this and got a fast reponse:</p>
+<blockquote class="twitter-tweet" data-lang="en">
+<p lang="en" dir="ltr">
+This was before I was adding detailed sub-readme guides.<br><br>Data corresponds to NFL week 1-16 and was part of a fantasy football relevant data challenge. 👍
+</p>
+— Thomas Mock 👨🏼 💻 (<span class="citation">@thomas_mock</span>) <a href="https://twitter.com/thomas_mock/status/1093564713869500421?ref_src=twsrc%5Etfw">February 7, 2019</a>
+</blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>Remember in the lecture when I said about data wrangling and visualisation that “it sounds cheesy but we need to get to know our data” - this is a good example of a time when I should have got to know the data before my analysis because my plot doesn’t actually show rushing season totals it shows rushing season totals not including the final game of every season!</p>
+<p>It’s a valuable lesson. Nevertheless the time is not wasted because whenever you try to produce a complicated plot like this you either learn something new or reinforce what you already knew.</p>
+<p>Now I need to get that final game_week data for each season… :-)</p>
+</div>
