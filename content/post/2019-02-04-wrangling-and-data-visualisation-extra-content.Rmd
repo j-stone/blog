@@ -12,8 +12,8 @@ tags:
   - ggplot2
   - wrangling
   - visualisation
-  - '#TidyTuesday'
-  - '#rstats'
+  - TidyTuesday
+  - rstats
 ---
 
 ```{r setup, include=FALSE}

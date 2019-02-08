@@ -21,3 +21,4 @@ hugo.linux
 .Rproj.*
 *.Rproj.*
 /.Rproj.user/
+.Rproj.user
