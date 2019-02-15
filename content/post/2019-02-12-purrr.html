@@ -1,0 +1,167 @@
+---
+title: purrr
+author: James Stone
+date: '2019-02-12'
+slug: What is a slug?
+categories: []
+tags:
+  - R
+  - rstats
+  - purrr %>% 
+---
+
+
+
+<p>Continuing with the theme of extending the content covered in our sessions on the course ‘2095 - Understanding Data in the Social Sciences’ in this post I am going to discuss using functional programming techniques in the tidyverse to further analyse some of the data we’ve worked with up to our third session (Correlation and Linear Regression).</p>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<p>I’ve already loaded the data, you know how to do this from the workshop and where to find the data (minerva) or alternatively it can be found <a href="https://www.kaggle.com/sandeep04201988/housing-price-index-using-crime-rate-data">here</a> on kaggle.</p>
+<p>The data looks like this:</p>
+<pre class="r"><code>head(crime_data)</code></pre>
+<pre><code>## # A tibble: 6 x 9
+##    Year index_nsa `City, State` Population `Violent Crimes` Homicides Rapes
+##   &lt;dbl&gt;     &lt;dbl&gt; &lt;chr&gt;              &lt;dbl&gt;            &lt;dbl&gt;     &lt;dbl&gt; &lt;dbl&gt;
+## 1  1975      41.1 Atlanta, GA       490584             8033       185   443
+## 2  1975      30.8 Chicago, IL      3150000            37160       818  1657
+## 3  1975      36.4 Cleveland, OH     659931            10403       288   491
+## 4  1975      20.9 Oakland, CA       337748             5900       111   316
+## 5  1975      20.4 Seattle, WA       503500             3971        52   324
+## 6    NA      NA   &lt;NA&gt;                  NA               NA        NA    NA
+## # ... with 2 more variables: Assaults &lt;dbl&gt;, Robberies &lt;dbl&gt;</code></pre>
+<p>The years for which there is data:</p>
+<pre class="r"><code>unique(crime_data$Year)</code></pre>
+<pre><code>##  [1] 1975   NA 1976 1977 1978 1979 1980 1981 1982 1983 1984 1985 1986 1987
+## [15] 1988 1989 1990 1991 1992 1993 1994 1995 1996 1997 1998 1999 2000 2001
+## [29] 2002 2003 2004 2005 2006 2007 2008 2009 2010 2011 2012 2013 2014 2015</code></pre>
+<p>In class we isolated the 2015 data and looked at some potential relationships such as that between population size and number of violent crimes in a city. But first we did a bit of wrangling to make the data more ‘tidy’ and have variable names that play more nicely with R.</p>
+<pre class="r"><code>crime_data = crime_data %&gt;% 
+  separate(col = `City, State`, into = c(&quot;City&quot;, &quot;State&quot;)) %&gt;%
+  rename(house_price_index = index_nsa,
+         violent_crimes = `Violent Crimes`
+  ) %&gt;% 
+  na.omit()</code></pre>
+<p>We then fit the simple linear regression model between number of VCs and Population. Note here I used <strong>coef()</strong> to extract just the beta-estimates for the regression model rather than print out the whole <strong>summary()</strong> (for brevity).</p>
+<pre class="r"><code>crime_data_2015 = filter(crime_data, Year == 2015)
+lm_2015 = lm(violent_crimes ~ Population, data = crime_data_2015)
+coef(lm_2015)</code></pre>
+<pre><code>## (Intercept)  Population 
+## 5.247655418 0.008612457</code></pre>
+<div id="how-can-we-efficiently-do-this-for-every-year" class="section level1">
+<h1>How can we efficiently do this for every year?</h1>
+<p>The dataset has information spread across 41 consecutive years. Is the <span class="math inline">\(\beta_{1}\)</span> coefficient describing the gradient betwen Population and number of VCs consistent across all those years or does it vary?</p>
+<p>The goal here immediately brings to mind the idea of having to repeat the same task over and over. This would be a good time to brag about the fact we use R in our class instead of something like SPSS.</p>
+<p>Whenever you have a task that appears to involve repetition stop and think about how we can use R to most effectively and hastily complete said task.</p>
+<p>The fundamental programming concept that comes to mind to repeat a task multiple times is the <strong>for-loop</strong>. For a brief desceiption on for-loops see <a href="https://r4ds.had.co.nz/iteration.html#for-loops">this section</a> of the <strong>R4DS</strong> book.</p>
+<div id="identify-what-varies-between-the-repetitive-calls" class="section level2">
+<h2>Identify what varies between the repetitive calls</h2>
+<p>Looking again at how we achieved the model fitting for the 2015 data:</p>
+<pre class="r"><code>crime_data_2015 = filter(crime_data, Year == 2015)
+lm_2015 = lm(violent_crimes ~ Population, data = crime_data_2015)</code></pre>
+<p>Then thinking about what would change about this code if we wanted to fit the model for 2014 instead. It’s essentially only defining the year we are interested in that would need to be altered. The model formulation would be exactly the same. By defining a year to filter the data by we have already split the data we are interested in away from the rest of the data we don’t want to include so as long as this data is what is fed into <strong>lm()</strong> function the actual model specification remains unchanged.</p>
+<p>Therefore the ‘traditional’ method to solvew a problem like this would be to create a for-loop where the year is the variable parameter that changes on each loop. Something like this:</p>
+<pre class="r"><code>years = unique(crime_data$Year) # create a vector of 
+models = vector(&quot;list&quot;, length(years)) # create an empty list that will be populated with the results of the model calls.
+
+for (i in years) {
+  models[[as.character(i)]] = lm(violent_crimes ~ Population, data = filter(crime_data, Year == i))
+}</code></pre>
+<p>This does the job. But there is another way to do this using a tidyverse package called <strong>purrr</strong>. We’ve adopted the “tidyverse way” for our foray into R programming on this course so why would we stop when the programming gets a bit more involved?</p>
+<p>The <strong>map</strong> family of functions can be used to replace traditional for-loops (they will essentially construct them for us behind-the-scenes) with the goal of making our code more readable. We’ve spent time already talking about the concept of readability and why we use <em>pipes</em> and the verbage of dplyr (e.g. spread, gather, mutate, select, etc.).</p>
+<p>Here’s one way to achieve the same result as the previous for-loop using the <strong>map()</strong> function from the purrr package:</p>
+<pre class="r"><code>models_years = crime_data %&gt;% 
+  split(.$Year) %&gt;% 
+  map(function(df) lm(violent_crimes ~ Population, data=df))</code></pre>
+<p>It’s important to note that there are always more than one way to achieve an objective using R and for the vast majority of use cases the quickest way you can produce the desired result is the best way, so you can move on to the next task (we’re talking about speed in terms of our time spent coding, not the time the code takes to execute). In my opinion getting familiar with using functions like <strong>map()</strong> makes my work faster, not just to initially construct but <strong>especially</strong> if I come back to the code months later and try to remind myself what I was doing because of the enhanced readability.</p>
+</div>
+</div>
+<div id="how-map-works" class="section level1">
+<h1>how map works?</h1>
+<p>The two main parts of a map function call are:</p>
+<ol style="list-style-type: decimal">
+<li><p>some vector or list which defines the variable part of the process.</p>
+<ul>
+<li>In our case this is a vector of the years for which we want to compute the linear model separately.</li>
+</ul></li>
+<li><p>a function which will be applied once for each element of the vector/list provided as the first argument.</p></li>
+</ol>
+<p>Let’s breakdown how our map() call worked:</p>
+<pre class="r"><code>models_years = crime_data %&gt;% 
+  split(.$Year) %&gt;% 
+  map(function(df) lm(violent_crimes ~ Population, data=df))</code></pre>
+<p>Remember how the pipe works, the result of the left-hand-side operation is passed in as the first argument to whatever is on the right hand side of the pipe. So we create the vector/list to ‘loop’ over with</p>
+<pre class="r"><code>crime_data %&gt;% split(.$Year)</code></pre>
+<p>The <a href="https://www.rdocumentation.org/packages/base/versions/3.5.2/topics/split"><strong>split()</strong></a> function (find the help page using ?split in the R console or following the link) takes the <em>crime_data</em> dataframe, filters by each unique value of <em>Year</em>, and creates a list where each element of the list is the data for a particular year.</p>
+<pre class="r"><code>class(crime_data %&gt;% split(.$Year))</code></pre>
+<pre><code>## [1] &quot;list&quot;</code></pre>
+<pre class="r"><code>length(crime_data %&gt;% split(.$Year))</code></pre>
+<pre><code>## [1] 41</code></pre>
+<p>This list is passed as the first argument to <strong>map()</strong> thanks to the pipe. So what is left for us is to define the function we want to apply to each element of this list:</p>
+<pre class="r"><code>function(df) lm(violent_crimes ~ Population, data=df)</code></pre>
+<p>This function takes some input called <em>df</em> and fits a linear model using that input as the data argument.</p>
+<p>Putting it all together I hope you can see that what will happen is that this linear model defined in the function will be fit once for every set of data that is filtered by each year. So in just three short lines of R code we have fit 41 linear regression models.</p>
+<div id="map_-variants" class="section level2">
+<h2>map_() variants</h2>
+<p>Other functions in the <strong>map()</strong> family can be used when the result of the function you want to apply is a specific datatype like a character string or a numeric value.</p>
+<p>In the example we have executed here the result of the function call is a linear model. This is a specific type of object in R so we needed to use <strong>map()</strong> so the result was a list - a list can hold any type of data. If the result of the function call is simpler we can use <strong>map_dbl()</strong> or <strong>map_chr()</strong> for numeric/string output respectively.</p>
+<p>Let’s extract the gradient value estimates ($_{1}) from the 41 models we’ve miraculously fit with 3 lines of code already.</p>
+<pre class="r"><code>gradients = map_dbl(
+  models_years,
+  function(x) coef(x)[2]
+)</code></pre>
+<p>Following the logic of pipes and the map functions we know that this code will take each of the models we’ve created and stored in the <em>models_years</em> list, extract all the coefficients using the <strong>coef()</strong> function, then specifically pick the second coeffient as the first coefficient is the intercept and we don’t want that, we want the gradient.</p>
+<pre class="r"><code>print(gradients)</code></pre>
+<pre><code>##        1975        1976        1977        1978        1979        1980 
+## 0.011220511 0.009514689 0.009093924 0.008954632 0.009417303 0.010002685 
+##        1981        1982        1983        1984        1985        1986 
+## 0.008942209 0.009808152 0.012497096 0.016744287 0.016908701 0.019367087 
+##        1987        1988        1989        1990        1991        1992 
+## 0.019290728 0.019652199 0.020499478 0.024672256 0.026744744 0.024111563 
+##        1993        1994        1995        1996        1997        1998 
+## 0.022937969 0.022329115 0.021502963 0.019874243 0.018845371 0.018818741 
+##        1999        2000        2001        2002        2003        2004 
+## 0.016501932 0.014955911 0.014566757 0.014225781 0.012945234 0.012190550 
+##        2005        2006        2007        2008        2009        2010 
+## 0.012262434 0.012072332 0.011815353 0.011685322 0.011066649 0.010319863 
+##        2011        2012        2013        2014        2015 
+## 0.009614619 0.009513996 0.008903737 0.008566464 0.008612457</code></pre>
+<p>These examples cover the basics of using the <strong>map()</strong> functions in the context of our examples from class. You can now viusalise or analyse differences between the years very easily.</p>
+</div>
+<div id="how-has-the-coefficient-between-population-size-and-number-of-violent-crimes-changed-over-time" class="section level2">
+<h2>How has the coefficient between population size and number of violent crimes changed over time?</h2>
+<pre class="r"><code>gradients = gradients %&gt;% 
+  as.data.frame() %&gt;%
+  rownames_to_column(&quot;year&quot;)
+colnames(gradients)[2] = c(&quot;gradient&quot;) </code></pre>
+<pre class="r"><code>ggplot(data = gradients, aes(x = year, y = gradient * 1000)) + 
+  geom_point(size=5, color = &quot;#42a3ca&quot;) + 
+  geom_segment(aes(y=0,
+                   x = year,
+                   yend = gradient*1000,
+                   xend = year),
+               color=&quot;#42a3ca&quot;) + 
+  labs(title=&quot;Estimated number of additional violent crimes for every additional \n1000 people in US cities by year&quot;) + 
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) </code></pre>
+<p><img src="/post/2019-02-12-purrr_files/figure-html/unnamed-chunk-18-1.png" width="1152" /></p>
+</div>
+</div>
+<div id="what-about-violent-crime-rate" class="section level1">
+<h1>What about violent crime rate?</h1>
+<p>At the end of our worksheet in class it wa sbrought up that if the number of violent crimes rises in line with the populatio number then it doesn’t mean that any one person is actually more at risk in a big city compared to a small city. Instead we might want to look at crime numbers as a crime rate rather than raw number.</p>
+<pre class="r"><code>crime_data = crime_data %&gt;% 
+  mutate(violent_crime_rate = violent_crimes / Population)
+
+models_years_vcRate = crime_data %&gt;% 
+    split(.$Year) %&gt;% 
+    map(function(df) lm(violent_crime_rate ~ Population, data=df))</code></pre>
+<p>Recall that we tried this for 2015 in class and the coefficient was not significant (p-value under 0.05). We want to quickly check if this value is actually significant for any of the models we have fit.</p>
+<pre class="r"><code>pvals = map_dbl(models_years_vcRate,
+                function(mod) {
+                  summary(mod)$coefficients[2,4]
+                })
+sum(pvals &lt; 0.05)</code></pre>
+<pre><code>## [1] 0</code></pre>
+<p>I’m not going to explain the code that gets the p-value, instead try and explore it yourself. The approach to solving a problem like this is to isolate the model output for one year:</p>
+<pre class="r"><code>tmp_object = summary(models_years_vcRate[[1]]) # get the summary of the first model object and assign it to a variable name</code></pre>
+<p>Use that model to work out how to get the p-value for the Population coefficient (<em>tip: class(tmp_object$coefficients)</em>). Then plug it into the map() function!</p>
+<p>This relationship is non-signifcant every year. So while population size increases do lead to more crime in general it does not lead to a significantly greater risk per person in those cities with larger populations. According to these data anyway!</p>
+</div>

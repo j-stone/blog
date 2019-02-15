@@ -2,11 +2,17 @@ baseurl = "/"
 languageCode = "en-us"
 theme = "hugo-theme-terminal"
 paginate = 5
+highlightjsLang = ["r", "yaml"]
+highlightjsTheme = "github"
 
 [params]
   contentTypeName = "post"
   themeColor = "red"
   showMenuItems = 2
+  highlightjsVersion = "9.12.0"
+  highlightjsCDN = "//cdnjs.cloudflare.com/ajax/libs"
+  highlightjsLang = ["r", "yaml"]
+  highlightjsTheme = "github"
 
 [languages]
   [languages.en]
