@@ -2,7 +2,7 @@
 title: purrr
 author: James Stone
 date: '2019-02-12'
-slug: What is a slug?
+slug: For-Loops-and-Purrr
 categories: []
 tags:
   - R
