@@ -1,0 +1,169 @@
+---
+title: TidyTuesday - US PhDs
+author: James Stone
+date: '2019-02-19'
+slug: tidytuesday-us-phds
+categories:
+  - TidyTuesday
+  - Data Viz
+tags:
+  - rstats
+  - TidyTuesday
+  - visualisation
+  - collapsibleTree
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 8)
+extrafont::loadfonts(device="win")
+```
+
+For this week's #TidyTuesday I'm going to look at the [collapsibleTree](https://cran.r-project.org/web/packages/collapsibleTree/index.html) package and learn the basics. By picking a new package/vis-technique each week to go with each #tidyTuesday dataset it presents the opportunity to both practice tidyverse wrangling and gain new knowledge each time.
+
+# collapsibleTree 
+
+```{r eval=FALSE}
+if (!"collapsibleTree" %in% installed.packages()) {
+  install.package("collapsibleTree")
+}
+```
+
+Load libraries:
+
+```{r include=FALSE}
+library(tidyverse)
+library(collapsibleTree)
+```
+
+```{r eval = FALSE}
+library(tidyverse)
+library(collapsibleTree)
+```
+
+Load Data:
+
+```{r}
+phd_data <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-02-19/phd_by_field.csv")
+```
+
+Check for missing data:
+
+```{r}
+sum(is.na(phd_data$n_phds))
+sum(phd_data$n_phds == 0, na.rm=T)
+```
+
+If there was no 0 values then would seem sensible to assume the NA values could be re-coded to 0. Best to just remove them in this case, zero by omission. 
+
+## A basic collapsible tree diagram
+
+The *collapsibleTree()* function is the workhorse function to produce the plots and a basic version can be produced by simply giving it tidy data and specifying the hierarchy of nodes:
+
+```{r}
+# Broad Field -> Year -> Total
+phd_data %>% 
+  filter(!is.na(n_phds)) %>% 
+  group_by(year, broad_field) %>% 
+  summarise(
+    total = sum(n_phds)
+  ) %>% 
+  collapsibleTree(
+    c("broad_field", "year", "total")
+  )
+```
+
+## collapsibleTreeSummary()
+
+### Order nodes by total PhDs awarded
+
+Changing to **collapsibleTreeSummary()** instead of collapsibleTree changes the default colors and adds some hover information (number of leaf nodes by default). We can add the attribute argument to use a different metric to the internal weighting which will define the order in which leaves are presented and information in the hover. We can take "total" out of the hierarchy now:
+
+```{r}
+# Broad Field -> Year -> Total
+phd_data %>% 
+  filter(!is.na(n_phds)) %>% 
+  group_by(year, broad_field) %>% 
+  summarise(
+    total = sum(n_phds)
+  ) %>% 
+  collapsibleTreeSummary(
+    hierarchy = c("broad_field", "year"),
+    attribute = "total",
+    maxPercent = 50,
+    zoomable = F
+  )
+```
+
+## map the size of displayed nodes to values from a variable
+
+Use the **nodeSize** argument:
+
+```{r}
+# Broad Field -> Year -> Total
+phd_data %>% 
+  filter(!is.na(n_phds)) %>% 
+  group_by(year, broad_field) %>% 
+  summarise(
+    total = sum(n_phds)
+  ) %>% 
+  collapsibleTreeSummary(
+    hierarchy = c("broad_field", "year"),
+    attribute = "total",
+    nodeSize = "total",
+    zoomable = F
+  )
+```
+
+## Custom color pallete
+
+### collapsibleTree()
+
+I wanted an element of gradient-fill within each level. From what I could gather the only way to do this was to carefully construct a vector of colours to fill based on the hierarchy I had specified which I did via the following method (the match between the second/third level main colour could be better if I had more time!):
+
+```{r}
+phd_data %>% 
+  filter(!is.na(n_phds)) %>% 
+  group_by(year, broad_field) %>% 
+  summarise(
+    total = sum(n_phds)
+  ) %>% 
+  collapsibleTree(
+    hierarchy = c("broad_field", "year", "total"),
+    fill = 
+      c(
+        "steelblue4",
+        RColorBrewer::brewer.pal(n = length(unique(.$broad_field)), "Accent"),
+        unlist(purrr::map(
+          c("Greens","Purples","Oranges","Greys","Blues","Reds","Blues"),
+          function(x) colorRampPalette(RColorBrewer::brewer.pal(n = 9, name = x))(length(unique(.$year)))
+        )),
+        rep("#43a3ca",70)
+      ),
+    zoomable=F
+  )
+```
+
+## collapsibleTreeSummary()
+
+The way colouring works is different in the **summary()** wrapper. I couldn't quickly work out a way to do the same within-level gradient fill as previously. Any tips on how to do that would be great.
+
+```{r}
+phd_data %>% 
+  filter(!is.na(n_phds)) %>% 
+  group_by(year, broad_field) %>% 
+  summarise(
+    total = sum(n_phds)
+  ) %>% 
+  collapsibleTreeSummary(
+    hierarchy = c("broad_field", "year"),
+    attribute = "total",
+    fillFun = colorspace::heat_hcl,
+    percentOfParent = TRUE,
+    zoomable=F,
+    nodeSize = "total"
+  )
+```
+
+# Conclusion
+
+Perhaps not the most sensible way to visualise the data here but an interesting visualisation tool to know about and have 'in the locker' for other problems down the line. Particularly useful when the volume of data needed to visualise is particularly large and a more concise alternative doesn't exist given how easy it is to produce the collapsible elements. 
