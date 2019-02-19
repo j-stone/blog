@@ -9,7 +9,7 @@ googleAnalytics = "UA-123456789-1"
   tag = "tags"
 
 [permalinks]
-  post = "/:filename/"
+  post = "/post/:filename/"
 
 [imaging]
   quality = 99
