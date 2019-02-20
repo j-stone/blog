@@ -1,0 +1,30 @@
+---
+title: 'TidyTuesday - US PhDs II - Flexdashboard'
+author: James Stone
+date: '2019-02-20'
+slug: tidytuesday-us-phds-ii
+categories:
+  - Data Viz
+  - TidyTuesday
+tags:
+  - collapsibleTree
+  - flexdashboard
+  - rstats
+  - TidyTuesday
+  - visualisation
+---
+
+
+
+<p>A brief second post on the week 9 #TidyTuesday data.</p>
+<p>After experimenting a little bit with the <code>collapsibleTree</code> package documented in the <a href="http://jstone.netlify.com/post/tidytuesday-us-phds/">previous post</a> on this week’s data I saw the following tweet from <a href="https://twitter.com/theotheredgar">theotheredgar</a>:</p>
+<blockquote class="twitter-tweet" data-partner="tweetdeck">
+<p lang="en" dir="ltr">
+A simple pre-rendered flexdashboard Shiny app is my submission for this week's <a href="https://twitter.com/hashtag/TidyTuesday?src=hash&amp;ref_src=twsrc%5Etfw">#TidyTuesday</a> . For the visualizations it uses collapsibleTree and formattable. The source code is embedded in the dashboard: <a href="https://t.co/Wfch5Vyq4F">https://t.co/Wfch5Vyq4F</a> <a href="https://twitter.com/hashtag/rstats?src=hash&amp;ref_src=twsrc%5Etfw">#rstats</a> <a href="https://t.co/8LlNyxkJro">pic.twitter.com/8LlNyxkJro</a>
+</p>
+— Edgar Ruiz (<span class="citation">@theotheredgar</span>) <a href="https://twitter.com/theotheredgar/status/1097955862235279360?ref_src=twsrc%5Etfw">February 19, 2019</a>
+</blockquote>
+<script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+<p>Just as a brief exercise using <a href="https://cran.r-project.org/web/packages/flexdashboard/index.html">flexdashboard</a> I converted the shiny application into an interactive html document by stripping out the shiny functionality. This allows the dashboard to be posted online without the need for a server running R code in the background (as all the charts/tables are static rather than dynamically generated).</p>
+<p>I have used <a href="https://cran.r-project.org/web/packages/shinydashboard/index.html">shinydashboard</a> in the past to produce dashboards for work projects but never <code>flexdashboard</code> and my initial thoughts are that it is a friendlier tool to use to make a relatively basic dashboard setup. So another useful tool to add to the ‘toolbox’ thanks to #TidyTuesday.</p>
+<p><a href="http://jamesmstone.co.uk/TidyTuesday-USphds-dash.html">Result is here with source code (use the button in top-right corner to see source)</a></p>
