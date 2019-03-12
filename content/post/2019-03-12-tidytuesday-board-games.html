@@ -1,0 +1,193 @@
+---
+title: TidyTuesday - Board Games
+author: James Stone
+date: '2019-03-12'
+slug: tidytuesday-board-games
+categories:
+  - Data Viz
+  - TidyTuesday
+tags:
+  - TidyTuesday
+  - bbplot
+  - Board Games
+description: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+<p>This weeks (2019 Week 11) <a href="https://www.twitter.com/search?q=%23TidyTuesday">#TidyTuesday</a> is about <a href="https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-03-12">Board Games</a> and I’ve been looking for an excuse to play with the <a href="https://github.com/bbc/bbplot">bbplot</a> package ever since the <a href="https://medium.com/bbc-visual-and-data-journalism/how-the-bbc-visual-and-data-journalism-team-works-with-graphics-in-r-ed0b35693535">Medium article by the BBC</a> outlining their use of ggplot2 was published. So here are a few plots from this weeks #TidyTuesday data built using bbplot!</p>
+<div id="golden-age-of-board-games" class="section level1">
+<h1>Golden age of Board Games?</h1>
+<p>As a starting point why not recreate the ‘Golden age of Board Games?’ plot from the <a href="https://fivethirtyeight.com/features/designing-the-best-board-game-on-the-planet/">fivethirtyeight article</a> that inspired this #TidyTuesday selection then use the bbplot package to add some BBC-inspired flair.</p>
+<p>Following the information in the <a href="https://bbc.github.io/rcookbook/">BBC R Cookbook</a> we can craft the plot as normal in ggplot2 and use <code>bbc_style()</code> as the final ggplot layer.</p>
+<p>A little bit of pre-work before building the plot is just to ensure we know the exact names of the 5 games that are specifically labelled in the plot we are recreating.</p>
+<pre class="r"><code>highlight_games = c(&quot;Acquire&quot;, &quot;Mouse Trap&quot;,&quot;Connect Four&quot;,&quot;The Settlers of Catan&quot;, &quot;Twilight Struggle&quot;)
+#ensure the names match
+board_games %&gt;% filter(name %in% highlight_games)</code></pre>
+<pre><code>## # A tibble: 4 x 22
+##   game_id description image max_players max_playtime min_age min_players
+##     &lt;dbl&gt; &lt;chr&gt;       &lt;chr&gt;       &lt;dbl&gt;        &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt;
+## 1       5 In Acquire~ //cf~           6           90      12           3
+## 2    2679 Mouse Trap~ //cf~           4           30       6           2
+## 3    2719 Connect 4 ~ //cf~           2           10       6           2
+## 4   12333 &amp;quot;Now ~ //cf~           2          180      13           2
+## # ... with 15 more variables: min_playtime &lt;dbl&gt;, name &lt;chr&gt;,
+## #   playing_time &lt;dbl&gt;, thumbnail &lt;chr&gt;, year_published &lt;dbl&gt;,
+## #   artist &lt;chr&gt;, category &lt;chr&gt;, compilation &lt;chr&gt;, designer &lt;chr&gt;,
+## #   expansion &lt;chr&gt;, family &lt;chr&gt;, mechanic &lt;chr&gt;, publisher &lt;chr&gt;,
+## #   average_rating &lt;dbl&gt;, users_rated &lt;dbl&gt;</code></pre>
+<p>Managed to get 4 out of 5 by just trying the name as written in the plot, Settlers of Catan is the missing piece…</p>
+<pre class="r"><code>board_games[grep(&quot;[sS]ettlers&quot;,board_games$name),]</code></pre>
+<pre><code>## # A tibble: 8 x 22
+##   game_id description image max_players max_playtime min_age min_players
+##     &lt;dbl&gt; &lt;chr&gt;       &lt;chr&gt;       &lt;dbl&gt;        &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt;
+## 1    3655 Settlers o~ //cf~           4           60       7           2
+## 2    4394 Based on t~ //cf~           4           90      10           3
+## 3    6778 The Settle~ //cf~           4           90      12           2
+## 4   12004 Here&#39;s a d~ //cf~           4           60      12           2
+## 5   38821 In the Set~ //cf~           4           60       0           3
+## 6   67239 Catan is o~ //cf~           4          120      12           3
+## 7  152959 This entry~ //cf~           6           75      10           3
+## 8  154203 Settlers f~ //cf~           4           90      10           1
+## # ... with 15 more variables: min_playtime &lt;dbl&gt;, name &lt;chr&gt;,
+## #   playing_time &lt;dbl&gt;, thumbnail &lt;chr&gt;, year_published &lt;dbl&gt;,
+## #   artist &lt;chr&gt;, category &lt;chr&gt;, compilation &lt;chr&gt;, designer &lt;chr&gt;,
+## #   expansion &lt;chr&gt;, family &lt;chr&gt;, mechanic &lt;chr&gt;, publisher &lt;chr&gt;,
+## #   average_rating &lt;dbl&gt;, users_rated &lt;dbl&gt;</code></pre>
+<p>I know very little about board games but the fivethirtyeight plot shows it is mid90s and avg use rating ~ 7.5 and none of these match those criteria so…</p>
+<pre class="r"><code>filter(board_games[grep(&quot;[cC]atan&quot;,board_games$name),], year_published %in% 1994:1996 &amp; between(average_rating,7.25,7.75))</code></pre>
+<pre><code>## # A tibble: 1 x 22
+##   game_id description image max_players max_playtime min_age min_players
+##     &lt;dbl&gt; &lt;chr&gt;       &lt;chr&gt;       &lt;dbl&gt;        &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt;
+## 1      13 In Catan (~ //cf~           4          120      10           3
+## # ... with 15 more variables: min_playtime &lt;dbl&gt;, name &lt;chr&gt;,
+## #   playing_time &lt;dbl&gt;, thumbnail &lt;chr&gt;, year_published &lt;dbl&gt;,
+## #   artist &lt;chr&gt;, category &lt;chr&gt;, compilation &lt;chr&gt;, designer &lt;chr&gt;,
+## #   expansion &lt;chr&gt;, family &lt;chr&gt;, mechanic &lt;chr&gt;, publisher &lt;chr&gt;,
+## #   average_rating &lt;dbl&gt;, users_rated &lt;dbl&gt;</code></pre>
+<p>Good enough for me, so it’s “Catan”:</p>
+<pre class="r"><code>highlight_games[4] = &quot;Catan&quot;</code></pre>
+<p>Can get on with the plot now.</p>
+<pre class="r"><code>copy538 = ggplot(data = board_games, aes(x = year_published, y = average_rating)) + 
+  geom_point(alpha=0.05) + 
+  geom_point(data = board_games %&gt;% filter(name %in% highlight_games)) + 
+  geom_smooth(method=&quot;loess&quot;, se=F, color=&quot;red&quot;) +
+  geom_text_repel(data = board_games %&gt;% filter(name %in% highlight_games[c(1,4,5)]),
+                  aes(label = name),
+                  direction=&quot;y&quot;,
+                  nudge_y = 0.5,
+                  point.padding = 0.25,
+                  segment.color = NA,
+                  fontface=&quot;bold&quot;,
+                  family=&quot;Calibri&quot;) + 
+  geom_text_repel(data = board_games %&gt;% filter(name %in% highlight_games[c(2:3)]),
+                  aes(label = name),
+                  direction=&quot;y&quot;,
+                  nudge_y = -0.5,
+                  point.padding = 0.25,
+                  segment.color = NA,
+                  fontface=&quot;bold&quot;,
+                  family=&quot;Calibri&quot;) + 
+  scale_y_continuous(breaks = seq(0,10,2.5), limits=c(0,10)) + 
+  scale_x_continuous(breaks = seq(1950,2010,10)) + 
+  labs(x = &quot;&quot;, y = &quot;Average user rating&quot;,
+       title = &quot;A Golden Age Of Board Games?&quot;,
+       subtitle = &quot;Average user ratings for games by original year of production&quot;,
+       caption = &quot;SOURCE: BOARDGAMEGEEK/RASMUS GREVE&quot;) + 
+  bbc_style()
+copy538</code></pre>
+<p><img src="/post/2019-03-12-tidytuesday-board-games_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<p>The <code>finalise_plot()</code> is used to make the final style adjustments as designed by the BBC Data team. I can use the <code>source_name</code> argument to get back the caption that was lost when I added <code>bbc_style()</code>.</p>
+<pre class="r"><code>finalise_plot(plot_name = copy538, 
+              source_name = &quot;SOURCE: BOARDGAMEGEEK/RASMUS GREVE&quot;,
+              save_filepath = &quot;static/imgs/copy538_bbc.png&quot;)</code></pre>
+<div class="figure">
+<img src="/imgs/copy538_bbc.png" />
+
+</div>
+</div>
+<div id="a-look-at-game-mechanics" class="section level1">
+<h1>A look at game ‘mechanics’</h1>
+<div id="exactly-how-many-are-defined-in-the-dataset" class="section level2">
+<h2>Exactly how many are defined in the dataset?</h2>
+<pre class="r"><code>board_games %&gt;% 
+  cSplit(&quot;mechanic&quot;, direction=&quot;long&quot;) %&gt;% 
+  filter(!is.na(mechanic)) %&gt;% 
+  summarise(uniqueMechanics = length(unique(mechanic))) %&gt;% 
+  pull()</code></pre>
+<pre><code>## [1] 51</code></pre>
+</div>
+<div id="what-are-the-mostleast-common-mechanics" class="section level2">
+<h2>What are the most/least common mechanics?</h2>
+<pre class="r"><code>popmechanics = board_games %&gt;% 
+  cSplit(&quot;mechanic&quot;, direction=&quot;long&quot;) %&gt;% 
+  filter(!is.na(mechanic)) %&gt;% 
+  group_by(mechanic) %&gt;% 
+  summarise(numGamesWithMechanic = n(),
+            avgRating = mean(average_rating)) %&gt;% 
+  arrange(desc(numGamesWithMechanic)) %&gt;% 
+  mutate(mechanic = factor(mechanic, levels = mechanic[order(numGamesWithMechanic)])) %&gt;% 
+  ggplot(aes(x = mechanic, y = numGamesWithMechanic)) + 
+  geom_segment(aes(x = mechanic, xend = mechanic, y = 0, yend = numGamesWithMechanic),
+               color = &quot;#42a3ca&quot;) + 
+  geom_point(size = 5, color = &quot;#42a3ca&quot;) + 
+  labs(
+    x = &quot;&quot;,
+    y = &quot;&quot;,
+    title = &quot;How many board games include each mechanic?&quot;
+  ) + 
+  coord_flip() + 
+  bbc_style()
+finalise_plot(popmechanics,
+              source_name = &quot;SOURCE: BOARDGAMEGEEK/RASMUS GREVE&quot;,
+              save_filepath = &quot;static/imgs/popmechanics.png&quot;,
+              height_pixels = 1200,
+              width_pixels = 900)</code></pre>
+<div class="figure">
+<img src="/imgs/popmechanics.png" />
+
+</div>
+</div>
+<div id="average-rating-by-mechanic" class="section level2">
+<h2>Average Rating by Mechanic</h2>
+<pre class="r"><code>rating_by_mechanic = board_games %&gt;% 
+  cSplit(&quot;mechanic&quot;, direction=&quot;long&quot;) %&gt;% 
+  filter(!is.na(mechanic)) %&gt;% 
+  group_by(mechanic) %&gt;% 
+  summarise(numGamesWithMechanic = n(),
+            avgRating = mean(average_rating)) %&gt;% 
+  mutate(centeredRating = avgRating - mean(board_games$average_rating, na.rm=T)) %&gt;%
+  mutate(quality = ifelse(centeredRating &lt; 0, &quot;below&quot;,&quot;above&quot;)) %&gt;% 
+  arrange(centeredRating) %&gt;% 
+  mutate(mechanic = factor(mechanic, levels = mechanic[order(centeredRating)])) %&gt;% 
+  ggplot(aes(x = mechanic, y = centeredRating)) + 
+  geom_bar(stat=&quot;identity&quot;, aes(fill = quality)) +
+  scale_fill_manual(values = c(&quot;#00ba38&quot;,&quot;#c41d3c&quot;), guide=FALSE) +
+  labs(x = &quot;&quot;,
+       y = &quot;&quot;,
+       title = &quot;Average Game Rating by Mechanic&quot;,
+       subtitle = &quot;Compared to overall average rating&quot;) + 
+  coord_flip() + 
+  bbc_style()
+
+finalise_plot(rating_by_mechanic,
+              source_name = &quot;SOURCE: BOARDGAMEGEEK/RASMUS GREVE&quot;,
+              save_filepath = &quot;static/imgs/ratingbymechanic.png&quot;,
+              height_pixels = 1200,
+              width_pixels = 900)</code></pre>
+<div class="figure">
+<img src="/imgs/ratingbymechanic.png" />
+
+</div>
+</div>
+</div>
+<div id="compare-to-theme_minimal" class="section level1">
+<h1>Compare to theme_minimal()</h1>
+<p>As a comparison let’s reproduce the three plots above implementing <code>theme_minimal()</code> as opposed to <code>bbc_style() + finalise_plot()</code>.</p>
+<p><img src="/post/2019-03-12-tidytuesday-board-games_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p><img src="/post/2019-03-12-tidytuesday-board-games_files/figure-html/unnamed-chunk-11-1.png" width="672" /></p>
+<p><img src="/post/2019-03-12-tidytuesday-board-games_files/figure-html/unnamed-chunk-12-1.png" width="672" /></p>
+<p>There is a sharpness to the BBC aesthetic that is rather appealing and it’s easy to see how they’ve settled on some of the theme choices they’ve made given how important it is that the data visualisations they produce are as readable as possible. My default has tended to be to just add <code>theme_minimal()</code> to the end of the majority of my ggplot graphics and then tinker with anything else that might need editing theme-wise. The addition of <code>bbc_style()</code> to the R universe adds another most-welcome potential theme for clean and crisp ggplots.</p>
+</div>
