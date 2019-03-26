@@ -1,0 +1,110 @@
+---
+title: Basic Sentiment Analysis Time Series - A look at the Bayern Munich v Liverpool
+  game via Twitter
+author: James Stone
+date: '2019-03-18'
+slug: basic-sentiment-analysis-time-series-a-look-at-the-bayern-munich-v-liverpool-game-via-twitter
+categories:
+  - LUBS2095 - Understanding Data in the Social Sciences
+  - Data Viz
+  - Sentiment Analysis
+tags:
+  - dplyr
+  - rstats
+  - visualisation
+  - wrangling
+  - text-analysis
+  - sentiment
+description: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+<p>In class this week we looked at some ways of making sense of social network data. One of the types of analyses we did was a ‘sentiment analysis’. To give a further example to solidify the concept and to take a topic very different to the political example we used in class I decided it may be interesting to look at tweets sent during the live broadcast of a recent important football match. The one that came to mind was the recent Bayern Munich vs Liverpool game in the Champions League that <a href="https://www.bbc.co.uk/sport/football/47543631">ended 3-1 to Liverpool</a>. If we take only tweets in the English language we can have a reasonable degree of confidence that the vast majority of tweets would be coming from sources who were supporting Liverpool - In European competition English fans tend to want English clubs to win as long as they aren’t playing their own team (there are obviously exceptions). Seems reasonable to expect ebbs and flow of sentiment based around in-game events.</p>
+<div id="getting-the-tweets" class="section level2">
+<h2>Getting the tweets</h2>
+<p>Using the <a href="https://github.com/mkearney/rtweet">rtweet</a> package to connect to Twitter API and collect the tweets looked like this:</p>
+<pre class="r"><code>#munich_lpool = rtweet::search_tweets(q=&quot;#BAYLIV&quot;, n = 36000, include_rts = F, retryonratelimit = TRUE, lang=&quot;en&quot;)</code></pre>
+<p>I ran this code the day after the game, this combined with using the hashtag most associated with the tie I was fairly confident these parameters would yield the tweets I needed.</p>
+<p>What is the time-range the tweets span unfiltered:</p>
+<pre class="r"><code>min(munich_lpool$created_at)</code></pre>
+<pre><code>## [1] &quot;2019-03-05 17:58:21 UTC&quot;</code></pre>
+<pre class="r"><code>max(munich_lpool$created_at)</code></pre>
+<pre><code>## [1] &quot;2019-03-15 11:39:52 UTC&quot;</code></pre>
+<p>Filter down to just the tweets between the time periods 5-mins before kickoff and approx 10 mins after the full-time whistle:</p>
+<pre class="r"><code>munich_lpool = munich_lpool %&gt;% 
+  filter(created_at &lt; lubridate::ymd_hms(&quot;2019-03-13 22:00:00&quot;)) %&gt;% 
+  filter(created_at &gt; lubridate::ymd_hms(&quot;2019-03-13 19:55:00&quot;)) %&gt;% 
+  arrange(created_at)</code></pre>
+<p>We probably don’t need to do much of text-cleaning we considered in class because we will lose any ambiguous text in the join with the lexicon anyway.</p>
+<pre class="r"><code>munich_lpool_words = munich_lpool %&gt;% 
+  select(text, created_at) %&gt;% 
+  unnest_tokens(word, text, token = &quot;tweets&quot;)</code></pre>
+<p>What we want to do that’s different in this analysis is group the tweets together as close as possible to the minute of the actual match.</p>
+<pre class="r"><code>munich_lpool_words_groupedTime = munich_lpool_words %&gt;% 
+  inner_join(get_sentiments(&quot;afinn&quot;), by=&quot;word&quot;) %&gt;% 
+  mutate(timebin = cut(created_at, 
+                       seq(lubridate::ymd_hms(&quot;2019-03-13 19:55:00&quot;),lubridate::ymd_hms(&quot;2019-03-13 22:00:00&quot;), by=60),
+                       labels = (1:(length(seq(lubridate::ymd_hms(&quot;2019-03-13 19:55:00&quot;),lubridate::ymd_hms(&quot;2019-03-13 22:00:00&quot;), by=60))-1)-6))) %&gt;% 
+  group_by(timebin) %&gt;% 
+  summarise(sentimentTotal = sum(score), 
+            sentimentProp = sum(score) / n(),
+            numTweets = n())</code></pre>
+<p>Just as an extra note if you did wanted to look at the time-series as a <a href="https://en.wikipedia.org/wiki/Moving_average">moving average</a> you can do so by creating the outcome variable like this using the <a href="https://cran.r-project.org/web/packages/zoo/index.html">zoo package</a> (but with regards sentiment it wouldn’t be wise as we care about the very-short-term spikes and valleys we might see):</p>
+<pre class="r"><code># If we wanted to consider a moving average we could do this 
+# Not really sensible here but plenty of time-series situations where 
+# you would want to consider this.
+munich_lpool_words_groupedTime = munich_lpool_words_groupedTime %&gt;% 
+  mutate(movingAv = c(NA,NA,NA,NA,with(munich_lpool_words_groupedTime, zoo::rollmean(sentimentTotal, 5))))</code></pre>
+<p>Giving the timebin values a meaningful label corresponding to the stage of the match:</p>
+<pre class="r"><code>timinglabels = as.character(c(map_chr(1:5, function(x) paste0(&quot;pregame&quot;,x)),
+                              1:45,
+                              map_chr(1:2, function(x) paste0(&quot;45+&quot;,x)),
+                              map_chr(1:16, function(x) paste0(&quot;halftime&quot;,x)),
+                              46:90,
+                              map_chr(1:3, function(x) paste0(&quot;90+&quot;,x)),
+                              map_chr(1:9, function(x) paste0(&quot;postgame&quot;,x))))
+
+munich_lpool_words_groupedTime = munich_lpool_words_groupedTime %&gt;% 
+  mutate(timebin_labelled = factor(timebin, labels = timinglabels))</code></pre>
+<p>There is a lot of programming happening here compared to the examples we tend to use in class. This is reflective of the fact that real-world data often requires significant work to prepapre for the analysis (or visualisation) you want to produce. What we have here is a situation where it ‘appears’ complex because we do a lot of different things but when you look at each bit in turn you see the smaller chunks are things we are familiar with.</p>
+<p>We’re making extensive use of <code>dplyr</code> and the <code>%&gt;% pipe</code>, we’ve used <code>seq()</code> before and the logic of that extends to time-series sequences when given datetimes as start and end points, and <code>map_x</code> functions from the purrr package was covered in a <a href="https://jstone.netlify.com/post/purrr/">previous post</a>.</p>
+<p>Now we create the plot:</p>
+<pre class="r"><code>match.events &lt;- data.frame(
+  minute = c(&quot;26&quot;, &quot;39&quot;, &quot;69&quot;, &quot;84&quot;),
+  event = c(&quot;Mane Goal\n0-1&quot;, &quot;Matip OG\n1-1&quot;, &quot;VVD Goal\n1-2&quot;, &quot;Mane Goal\n1-3&quot;),
+  yaxadj = c(0,-100,0,-100)
+)
+
+bliv_plot = ggplot(data = munich_lpool_words_groupedTime, aes(x = timebin_labelled, y = sentimentTotal, group=1)) + 
+  geom_line(color=&quot;#42a3ca&quot;) + 
+  geom_vline(data = match.events, aes(xintercept = which(munich_lpool_words_groupedTime$timebin_labelled %in% match.events$minute)), color=&quot;#ffec1b&quot;) + 
+  geom_text_repel(data = match.events,
+                  aes(x = minute, y = 450 + yaxadj, label = event),
+                  direction = &quot;x&quot;,
+                  nudge_x = 0.5,
+                  size = 3,
+                  color = &quot;#ffec1b&quot;,
+                  family=&quot;Comfortaa&quot;) + 
+  labs(
+    x = &quot;Time (in Match)&quot;,
+    y = &quot;Sentiment Total&quot;,
+    title = &quot;Time-Series of sentiment during Bayern vs Liverpool&quot;,
+    subtitle = &quot;Tweets filtered by lang=&#39;en&#39;&quot;
+  ) + 
+  scale_x_discrete(breaks = c(seq(1,45,4),
+                              &quot;45+2&quot;,
+                              seq(46,90,4),
+                              &quot;90+3&quot;)) +
+  hrbrthemes::theme_ft_rc() + 
+  theme(axis.text.x = element_text(angle=90))
+
+print(bliv_plot)</code></pre>
+<p><img src="/post/2019-03-18-basic-sentiment-analysis-time-series-a-look-at-the-bayern-munich-v-liverpool-game-via-twitter_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>In this game it was essentially good times all-round for Liverpool fans. They looked good from the start and from their first goal they were always in a position of advancing to the next-round (even at 1-1 they would win on away goals). And yet sentiment in the English-Language tweets was relatively neutral for the majority of the game. The speed at which sentiment crashes back down after the intial hype of goals is likely due to the actual number of tweets being far less in those time blocks.</p>
+<p><strong>In the code above we made sure to compute that information so perhaps as an exercise you can investigate this?</strong></p>
+<p>A way of controlling for this might be to look at the average sentiment of the terms within each timebin as opposed to the total sentiment score.</p>
+<p><strong>Can you edit the code provided to do this?</strong></p>
+</div>

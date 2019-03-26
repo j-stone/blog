@@ -1,0 +1,153 @@
+---
+title: Basic Sentiment Analysis Time Series - A look at the Bayern Munich v Liverpool
+  game via Twitter
+author: James Stone
+date: '2019-03-18'
+slug: basic-sentiment-analysis-time-series-a-look-at-the-bayern-munich-v-liverpool-game-via-twitter
+categories:
+  - LUBS2095 - Understanding Data in the Social Sciences
+  - Data Viz
+  - Sentiment Analysis
+tags:
+  - dplyr
+  - rstats
+  - visualisation
+  - wrangling
+  - text-analysis
+  - sentiment
+description: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r initialisation, include = FALSE}
+library(tidyverse)
+library(hrbrthemes)
+library(ggrepel)
+library(tidytext)
+extrafont::loadfonts(device="win")
+#munich_lpool = rtweet::search_tweets(q="#BAYLIV", n = 36000, include_rts = F, retryonratelimit = TRUE, lang="en")
+#saveRDS(munich_lpool, file = "data/bayliv.rds")
+munich_lpool = readRDS("bayliv.rds")
+```
+
+In class this week we looked at some ways of making sense of social network data. One of the types of analyses we did was a 'sentiment analysis'. To give a further example to solidify the concept and to take a topic very different to the political example we used in class I decided it may be interesting to look at tweets sent during the live broadcast of a recent important football match. The one that came to mind was the recent Bayern Munich vs Liverpool game in the Champions League that [ended 3-1 to Liverpool](https://www.bbc.co.uk/sport/football/47543631). If we take only tweets in the English language we can have a reasonable degree of confidence that the vast majority of tweets would be coming from sources who were supporting Liverpool - In European competition English fans tend to want English clubs to win as long as they aren't playing their own team (there are obviously exceptions). Seems reasonable to expect ebbs and flow of sentiment based around in-game events. 
+
+## Getting the tweets
+
+Using the [rtweet](https://github.com/mkearney/rtweet) package to connect to Twitter API and collect the tweets looked like this:
+
+```{r}
+#munich_lpool = rtweet::search_tweets(q="#BAYLIV", n = 36000, include_rts = F, retryonratelimit = TRUE, lang="en")
+```
+
+I ran this code the day after the game, this combined with using the hashtag most associated with the tie I was fairly confident these parameters would yield the tweets I needed. 
+
+What is the time-range the tweets span unfiltered:
+```{r}
+min(munich_lpool$created_at)
+max(munich_lpool$created_at)
+```
+
+Filter down to just the tweets between the time periods 5-mins before kickoff and approx 10 mins after the full-time whistle:
+
+```{r}
+munich_lpool = munich_lpool %>% 
+  filter(created_at < lubridate::ymd_hms("2019-03-13 22:00:00")) %>% 
+  filter(created_at > lubridate::ymd_hms("2019-03-13 19:55:00")) %>% 
+  arrange(created_at)
+```
+
+We probably don't need to do much of text-cleaning we considered in class because we will lose any ambiguous text in the join with the lexicon anyway. 
+
+```{r}
+munich_lpool_words = munich_lpool %>% 
+  select(text, created_at) %>% 
+  unnest_tokens(word, text, token = "tweets")
+```
+
+What we want to do that's different in this analysis is group the tweets together as close as possible to the minute of the actual match. 
+
+```{r}           
+munich_lpool_words_groupedTime = munich_lpool_words %>% 
+  inner_join(get_sentiments("afinn"), by="word") %>% 
+  mutate(timebin = cut(created_at, 
+                       seq(lubridate::ymd_hms("2019-03-13 19:55:00"),lubridate::ymd_hms("2019-03-13 22:00:00"), by=60),
+                       labels = (1:(length(seq(lubridate::ymd_hms("2019-03-13 19:55:00"),lubridate::ymd_hms("2019-03-13 22:00:00"), by=60))-1)-6))) %>% 
+  group_by(timebin) %>% 
+  summarise(sentimentTotal = sum(score), 
+            sentimentProp = sum(score) / n(),
+            numTweets = n())
+```
+
+Just as an extra note if you did wanted to look at the time-series as a [moving average](https://en.wikipedia.org/wiki/Moving_average) you can do so by creating the outcome variable like this using the [zoo package](https://cran.r-project.org/web/packages/zoo/index.html) (but with regards sentiment it wouldn't be wise as we care about the very-short-term spikes and valleys we might see):
+
+```{r}
+# If we wanted to consider a moving average we could do this 
+# Not really sensible here but plenty of time-series situations where 
+# you would want to consider this.
+munich_lpool_words_groupedTime = munich_lpool_words_groupedTime %>% 
+  mutate(movingAv = c(NA,NA,NA,NA,with(munich_lpool_words_groupedTime, zoo::rollmean(sentimentTotal, 5))))
+```
+
+Giving the timebin values a meaningful label corresponding to the stage of the match:
+
+```{r}
+timinglabels = as.character(c(map_chr(1:5, function(x) paste0("pregame",x)),
+                              1:45,
+                              map_chr(1:2, function(x) paste0("45+",x)),
+                              map_chr(1:16, function(x) paste0("halftime",x)),
+                              46:90,
+                              map_chr(1:3, function(x) paste0("90+",x)),
+                              map_chr(1:9, function(x) paste0("postgame",x))))
+
+munich_lpool_words_groupedTime = munich_lpool_words_groupedTime %>% 
+  mutate(timebin_labelled = factor(timebin, labels = timinglabels))
+```
+
+There is a lot of programming happening here compared to the examples we tend to use in class. This is reflective of the fact that real-world data often requires significant work to prepapre for the analysis (or visualisation) you want to produce. What we have here is a situation where it 'appears' complex because we do a lot of different things but when you look at each bit in turn you see the smaller chunks are things we are familiar with. 
+
+We're making extensive use of `dplyr` and the `%>% pipe`, we've used `seq()` before and the logic of that extends to time-series sequences when given datetimes as start and end points, and `map_x` functions from the purrr package was covered in a [previous post](https://jstone.netlify.com/post/purrr/). 
+
+Now we create the plot:
+
+```{r}
+match.events <- data.frame(
+  minute = c("26", "39", "69", "84"),
+  event = c("Mane Goal\n0-1", "Matip OG\n1-1", "VVD Goal\n1-2", "Mane Goal\n1-3"),
+  yaxadj = c(0,-100,0,-100)
+)
+
+bliv_plot = ggplot(data = munich_lpool_words_groupedTime, aes(x = timebin_labelled, y = sentimentTotal, group=1)) + 
+  geom_line(color="#42a3ca") + 
+  geom_vline(data = match.events, aes(xintercept = which(munich_lpool_words_groupedTime$timebin_labelled %in% match.events$minute)), color="#ffec1b") + 
+  geom_text_repel(data = match.events,
+                  aes(x = minute, y = 450 + yaxadj, label = event),
+                  direction = "x",
+                  nudge_x = 0.5,
+                  size = 3,
+                  color = "#ffec1b",
+                  family="Comfortaa") + 
+  labs(
+    x = "Time (in Match)",
+    y = "Sentiment Total",
+    title = "Time-Series of sentiment during Bayern vs Liverpool",
+    subtitle = "Tweets filtered by lang='en'"
+  ) + 
+  scale_x_discrete(breaks = c(seq(1,45,4),
+                              "45+2",
+                              seq(46,90,4),
+                              "90+3")) +
+  hrbrthemes::theme_ft_rc() + 
+  theme(axis.text.x = element_text(angle=90))
+
+print(bliv_plot)
+```
+
+In this game it was essentially good times all-round for Liverpool fans. They looked good from the start and from their first goal they were always in a position of advancing to the next-round (even at 1-1 they would win on away goals). And yet sentiment in the English-Language tweets was relatively neutral for the majority of the game. The speed at which sentiment crashes back down after the intial hype of goals is likely due to the actual number of tweets being far less in those time blocks. 
+
+__In the code above we made sure to compute that information so perhaps as an exercise you can investigate this?__
+
+A way of controlling for this might be to look at the average sentiment of the terms within each timebin as opposed to the total sentiment score.
+
+__Can you edit the code provided to do this?__
