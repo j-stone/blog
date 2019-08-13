@@ -1,0 +1,113 @@
+---
+title: Premier League Squad Valuations 2019/2020
+author: James Stone
+date: '2019-08-12'
+slug: premier-league-squad-valuations-2019-2020
+categories:
+  - Data Viz
+tags:
+  - Football
+  - Premier League
+  - Scraping
+description: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+extrafont::loadfonts(device="win")
+```
+
+A new season begins and every team is filled with renewed hope. But this isn't a sport where all competitors are on an equal footing. Using transfermarkt's estimated market value for each player here is the breakdown of total squad value for each Premier League team as the 2019/20 Premier League season kicks off. 
+
+# Get the data
+```{r}
+pacman::p_load(tidyverse, rvest, png, grid, RCurl)
+options(scipen = 999)
+
+# colours from EPL website
+purple.colour <- "#37003c"
+blue.colour <- "#05f0ff"
+pink.colour <- "#e90052"
+
+### Get the data from transfermarkt.de
+club_value_html <- read_html("https://www.transfermarkt.co.uk/premier-league/marktwerteverein/wettbewerb/GB1")
+
+club_value_data <- tibble(
+  club = club_value_html %>% 
+    html_nodes(".no-border-links") %>% 
+    html_text(),
+  badge = club_value_html %>% 
+    html_nodes(".tiny_wappen") %>% 
+    html_attr("src"),
+  squad_value = club_value_html %>% 
+    html_nodes("#yw1 .rechts.hauptlink") %>% 
+    html_text() %>% 
+    trimws()
+)
+```
+
+# Clean the data
+```{r}
+club_value_data <- club_value_data %>% 
+  mutate(squad_value_parsed = case_when(
+    grepl("bn", squad_value) ~ squad_value %>% 
+      str_extract("\\d+\\.\\d+") %>% 
+      as.numeric() * 1000000000,
+    grepl("m", squad_value) ~ squad_value %>% 
+      str_extract("\\d+\\.\\d+") %>% 
+      as.numeric() * 1000000
+  ))
+```
+
+# Plot
+
+```{r fig.height=10}
+ggplot(club_value_data %>% 
+         mutate(over310 = ifelse(squad_value_parsed > 310000000, TRUE, FALSE)) %>% 
+         mutate(club = fct_reorder(club, squad_value_parsed)),
+       aes(x = club, y = squad_value_parsed)) + 
+  geom_bar(stat="identity", 
+           colour = blue.colour,
+           fill = blue.colour) +
+  geom_text(aes(label = glue::glue("{club}: €{squad_value_parsed/1000000}M"),
+                y = ifelse(squad_value_parsed < 310000000,
+                           squad_value_parsed + 10000000,
+                           10000000),
+                colour = over310),
+            hjust=0,
+            family = "Roboto Condensed") + 
+  labs(title = str_wrap("Premier League Squad Value Table 2019/20", 80),
+       caption = "Source: transfermarkt.co.uk") +
+  coord_flip() + 
+  scale_color_manual(values = c('TRUE' = "black", 'FALSE' = "white"), guide="none") + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(
+    text = element_text(family="Roboto Condensed"),
+    axis.text.y = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    plot.background = element_rect(fill=purple.colour),
+    panel.background = element_rect(fill=purple.colour),
+    title = element_text(colour = blue.colour)
+  )
+```
+
+```{r, include=FALSE}
+#club_value_data <- club_value_data %>% 
+#  mutate(badge = str_replace(badge, "tiny", "head"))
+
+#all_badges <- club_value_data$badge %>% purrr::map(function(u){
+#  rasterGrob(readPNG(getURLContent(u)), interpolate = TRUE)
+#})
+
+#for (i in 1:length(club_value_data$badge)) {
+#  base.plot <- base.plot + 
+#    annotation_custom(all_badges[[i]],
+#                      xmin = seq(20,1)[i]-0.5,
+#                      xmax = seq(20,1)[i]+0.5,
+#                      ymin = 0,
+#                      ymax = 50000000)
+#}
+```

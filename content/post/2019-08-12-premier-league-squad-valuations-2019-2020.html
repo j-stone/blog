@@ -1,0 +1,89 @@
+---
+title: Premier League Squad Valuations 2019/2020
+author: James Stone
+date: '2019-08-12'
+slug: premier-league-squad-valuations-2019-2020
+categories:
+  - Data Viz
+tags:
+  - Football
+  - Premier League
+  - Scraping
+description: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+<p>A new season begins and every team is filled with renewed hope. But this isn’t a sport where all competitors are on an equal footing. Using transfermarkt’s estimated market value for each player here is the breakdown of total squad value for each Premier League team as the 2019/20 Premier League season kicks off.</p>
+<div id="get-the-data" class="section level1">
+<h1>Get the data</h1>
+<pre class="r"><code>pacman::p_load(tidyverse, rvest, png, grid, RCurl)
+options(scipen = 999)
+
+# colours from EPL website
+purple.colour &lt;- &quot;#37003c&quot;
+blue.colour &lt;- &quot;#05f0ff&quot;
+pink.colour &lt;- &quot;#e90052&quot;
+
+### Get the data from transfermarkt.de
+club_value_html &lt;- read_html(&quot;https://www.transfermarkt.co.uk/premier-league/marktwerteverein/wettbewerb/GB1&quot;)
+
+club_value_data &lt;- tibble(
+  club = club_value_html %&gt;% 
+    html_nodes(&quot;.no-border-links&quot;) %&gt;% 
+    html_text(),
+  badge = club_value_html %&gt;% 
+    html_nodes(&quot;.tiny_wappen&quot;) %&gt;% 
+    html_attr(&quot;src&quot;),
+  squad_value = club_value_html %&gt;% 
+    html_nodes(&quot;#yw1 .rechts.hauptlink&quot;) %&gt;% 
+    html_text() %&gt;% 
+    trimws()
+)</code></pre>
+</div>
+<div id="clean-the-data" class="section level1">
+<h1>Clean the data</h1>
+<pre class="r"><code>club_value_data &lt;- club_value_data %&gt;% 
+  mutate(squad_value_parsed = case_when(
+    grepl(&quot;bn&quot;, squad_value) ~ squad_value %&gt;% 
+      str_extract(&quot;\\d+\\.\\d+&quot;) %&gt;% 
+      as.numeric() * 1000000000,
+    grepl(&quot;m&quot;, squad_value) ~ squad_value %&gt;% 
+      str_extract(&quot;\\d+\\.\\d+&quot;) %&gt;% 
+      as.numeric() * 1000000
+  ))</code></pre>
+</div>
+<div id="plot" class="section level1">
+<h1>Plot</h1>
+<pre class="r"><code>ggplot(club_value_data %&gt;% 
+         mutate(over310 = ifelse(squad_value_parsed &gt; 310000000, TRUE, FALSE)) %&gt;% 
+         mutate(club = fct_reorder(club, squad_value_parsed)),
+       aes(x = club, y = squad_value_parsed)) + 
+  geom_bar(stat=&quot;identity&quot;, 
+           colour = blue.colour,
+           fill = blue.colour) +
+  geom_text(aes(label = glue::glue(&quot;{club}: €{squad_value_parsed/1000000}M&quot;),
+                y = ifelse(squad_value_parsed &lt; 310000000,
+                           squad_value_parsed + 10000000,
+                           10000000),
+                colour = over310),
+            hjust=0,
+            family = &quot;Roboto Condensed&quot;) + 
+  labs(title = str_wrap(&quot;Premier League Squad Value Table 2019/20&quot;, 80),
+       caption = &quot;Source: transfermarkt.co.uk&quot;) +
+  coord_flip() + 
+  scale_color_manual(values = c(&#39;TRUE&#39; = &quot;black&quot;, &#39;FALSE&#39; = &quot;white&quot;), guide=&quot;none&quot;) + 
+  ggthemes::theme_fivethirtyeight() + 
+  theme(
+    text = element_text(family=&quot;Roboto Condensed&quot;),
+    axis.text.y = element_blank(),
+    axis.text.x = element_blank(),
+    panel.grid = element_blank(),
+    plot.background = element_rect(fill=purple.colour),
+    panel.background = element_rect(fill=purple.colour),
+    title = element_text(colour = blue.colour)
+  )</code></pre>
+<p><img src="/post/2019-08-12-premier-league-squad-valuations-2019-2020_files/figure-html/unnamed-chunk-3-1.png" width="672" /></p>
+</div>
