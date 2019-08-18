@@ -19,11 +19,12 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 extrafont::loadfonts(device="win")
 ```
 
-A new season begins and every team is filled with renewed hope. But this isn't a sport where all competitors are on an equal footing. Using transfermarkt's estimated market value for each player here is the breakdown of total squad value for each Premier League team as the 2019/20 Premier League season kicks off. 
+A new season begins and every team is filled with renewed hope. But this isn't a sport where all competitors are on an equal footing. Using transfermarkt's estimated market value for each player here is the breakdown of total squad value for each Premier League team as the 2019/20 Premier League season kicks off. Will the market value league table at the start of the season reflect the standings after 38 gameweeks?
 
 # Get the data
 ```{r}
-pacman::p_load(tidyverse, rvest, png, grid, RCurl)
+pacman::p_load(tidyverse, rvest, png, grid, RCurl, janitor,
+               d3treeR, treemap)
 options(scipen = 999)
 
 # colours from EPL website
@@ -31,7 +32,7 @@ purple.colour <- "#37003c"
 blue.colour <- "#05f0ff"
 pink.colour <- "#e90052"
 
-### Get the data from transfermarkt.de
+### Get the data from transfermarkt
 club_value_html <- read_html("https://www.transfermarkt.co.uk/premier-league/marktwerteverein/wettbewerb/GB1")
 
 club_value_data <- tibble(
@@ -61,7 +62,7 @@ club_value_data <- club_value_data %>%
   ))
 ```
 
-# Plot
+# Plot the values
 
 ```{r fig.height=10}
 ggplot(club_value_data %>% 
@@ -71,7 +72,9 @@ ggplot(club_value_data %>%
   geom_bar(stat="identity", 
            colour = blue.colour,
            fill = blue.colour) +
-  geom_text(aes(label = glue::glue("{club}: €{squad_value_parsed/1000000}M"),
+  geom_text(aes(label = ifelse(squad_value_parsed/1000000 > 1000,
+                               glue::glue("{club}: £{squad_value_parsed/1000000000}B"),
+                               glue::glue("{club}: £{squad_value_parsed/1000000}M")),
                 y = ifelse(squad_value_parsed < 310000000,
                            squad_value_parsed + 10000000,
                            10000000),
@@ -94,20 +97,163 @@ ggplot(club_value_data %>%
   )
 ```
 
-```{r, include=FALSE}
-#club_value_data <- club_value_data %>% 
-#  mutate(badge = str_replace(badge, "tiny", "head"))
+# Treemap
 
-#all_badges <- club_value_data$badge %>% purrr::map(function(u){
-#  rasterGrob(readPNG(getURLContent(u)), interpolate = TRUE)
-#})
+To further examine these squad values and provide a more detailed summary for readers, let's construct an interactive treemap using team-specific colouring.
 
-#for (i in 1:length(club_value_data$badge)) {
-#  base.plot <- base.plot + 
-#    annotation_custom(all_badges[[i]],
-#                      xmin = seq(20,1)[i]-0.5,
-#                      xmax = seq(20,1)[i]+0.5,
-#                      ymin = 0,
-#                      ymax = 50000000)
-#}
+## Get the player-level data
+```{r}
+base_url <- "https://www.transfermarkt.co.uk"
+team_urls <- as.character(glue::glue("{base_url}{club_value_html %>% 
+  html_nodes('a.vereinprofil_tooltip') %>% 
+  html_attr('href') %>% 
+  unique()}"))
+
+squad_data <- team_urls %>% purrr::map_dfr(function(u) {
+  # delay to be respectful to the host site
+  Sys.sleep(runif(1,2,5))
+  
+  read_html(u) -> html.tmp
+  tibble(
+    number = html.tmp %>% 
+      html_nodes(".rn_nummer") %>% 
+      html_text() %>% 
+      as.numeric(),
+    player = html.tmp %>% 
+      html_nodes("span.hide-for-small a") %>% 
+      html_text() %>% 
+      .[. != ""],
+    position = html.tmp %>% 
+      html_nodes("#yw1 .inline-table tr+ tr td") %>% 
+      html_text(),
+    dob = html.tmp %>% 
+      html_nodes(".hide+ td") %>% 
+      html_text(),
+    nationality = html.tmp %>% 
+      html_nodes("#yw1 .flaggenrahmen:nth-child(1)") %>% 
+      html_attr("title"),
+    market_value = html.tmp %>% 
+      html_nodes(".rechts.hauptlink") %>% 
+      html_text()
+  ) %>% 
+    mutate(Team = html.tmp %>% html_nodes(".dataName span") %>% html_text())
+})
+```
+
+## Parse the data and contruct a colour map based on the team colours. 
+
+```{r}
+# Parse the numbers to make them the correct class and standardised
+
+squad_data <- squad_data %>% 
+  mutate(market_value_parsed = case_when(
+    grepl("k", market_value) ~ str_extract(market_value, 
+                                           "\\d+") %>% 
+      as.numeric() * 1000,
+    grepl("m", market_value) ~ str_extract(market_value,
+                                             "\\d+") %>% 
+      as.numeric() * 1000000,
+  )) %>%  
+  filter(!is.na(market_value_parsed))
+
+# colour map
+
+colour.map <- tibble(
+  Team = squad_data %>% pull(Team) %>% unique(),
+  main.col = c("#6caddf", "#dd0000",
+               "#020031", "#034694",
+               "#e80909", "#ef0107",
+               "#274488", "#0101e8",
+               "#7f0000", "#ed1c24",
+               "#fdbc02", "#ed1a3b",
+               "#fbee23", "#000000",
+               "#292d6b", "#005daa",
+               "#630f33", "#7b003a",
+               "#ffee00", "#ec2227")
+) %>% 
+  left_join(
+    squad_data %>% 
+      group_by(Team) %>% 
+      mutate(n.players = n_distinct(player)) %>% 
+      slice(1) %>% 
+      ungroup() %>% 
+      select(Team, n.players)
+  )
+
+col.palette <- character(0)
+for (i in 1:nrow(colour.map)) {
+  tmp.palette <- colorRampPalette(c(colour.map$main.col[i],"#ffffff"))
+  col.palette <- append(col.palette, tmp.palette(colour.map$n.players[i]))
+}
+```
+
+## Construct the static and interactive treemap using [treemap](https://github.com/mtennekes/treemap) and  [d3treeR](https://github.com/d3treeR/d3treeR)
+
+
+### Static
+
+```{r}
+squad_data %>% 
+      group_by(Team) %>% 
+      mutate(total_squad_value = sum(market_value_parsed)) %>% 
+      ungroup() %>% 
+      arrange(-total_squad_value, -market_value_parsed) %>% 
+      rownames_to_column("id") %>% 
+      mutate(id = fct_reorder(id, 1:n())) -> dat.df
+
+tmplot <- treemap(
+    dat.df,
+    index=c("Team", "player"),
+    vSize="market_value_parsed",
+    vColor="id",
+    type="categorical",
+    position.legend = "none",
+    palette = col.palette,
+    title = "2019/20 Premier League Squad/Player Values",
+    fontfamily.title = "Roboto Condensed",
+    fontfamily.labels = "Roboto Condensed",
+    align.labels = c("center","center")
+  )
+```
+
+```{r include=FALSE}
+style_widget <- function(hw=NULL, style="", addl_selector="") {
+  stopifnot(!is.null(hw), inherits(hw, "htmlwidget"))
+
+  # use current id of htmlwidget if already specified
+  elementId <- hw$elementId
+  if(is.null(elementId)) {
+    # borrow htmlwidgets unique id creator
+    elementId <- sprintf(
+      'htmlwidget-%s',
+      htmlwidgets:::createWidgetId()
+    )
+    hw$elementId <- elementId
+  }
+
+  htmlwidgets::prependContent(
+    hw,
+    htmltools::tags$style(
+      sprintf(
+        "#%s %s {%s}",
+        elementId,
+        addl_selector,
+        style
+      )
+    )
+  )
+}
+```
+
+### Interactive
+
+Note `style_widget()` from [here](https://github.com/d3treeR/d3treeR/issues/10#issuecomment-248098578). Click a team to make them the focus and see a breakdown of individual player value, click the title to zoom out again. 
+
+```{r}
+style_widget(
+  d3tree3(tmplot,
+          rootname = "Premier League Squad Values 2019/20"),
+  addl_selector="text",
+  style="font-family:Roboto Condensed; font-size:16px;"
+)
 ```
