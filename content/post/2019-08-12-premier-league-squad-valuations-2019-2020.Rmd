@@ -194,12 +194,13 @@ for (i in 1:nrow(colour.map)) {
 
 ```{r}
 squad_data %>% 
-      group_by(Team) %>% 
-      mutate(total_squad_value = sum(market_value_parsed)) %>% 
-      ungroup() %>% 
-      arrange(-total_squad_value, -market_value_parsed) %>% 
-      rownames_to_column("id") %>% 
-      mutate(id = fct_reorder(id, 1:n())) -> dat.df
+    mutate(player = glue::glue("{player}\n{market_value}")) %>% 
+    group_by(Team) %>% 
+    mutate(total_squad_value = sum(market_value_parsed)) %>% 
+    ungroup() %>% 
+    arrange(-total_squad_value, -market_value_parsed) %>% 
+    rownames_to_column("id") %>% 
+    mutate(id = fct_reorder(id, 1:n())) -> dat.df
 
 tmplot <- treemap(
     dat.df,
